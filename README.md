@@ -12,7 +12,14 @@ risk/governance) that operate the on-prem device fleet, running on Dell servers.
 - [`docs/architecture/AGENT_TEAM_ARCHITECTURE.md`](docs/architecture/AGENT_TEAM_ARCHITECTURE.md)
   — the full target architecture: the agent team, the five platform planes,
   Vault and multi-vendor connectivity, the deployment topology on the Dell
-  servers, the guardrail/autonomy model, and the phased build plan.
+  servers, the guardrail/autonomy model, the phased build plan, and the
+  locked Phase 1 decisions.
+
+## Setup
+
+- [`docs/setup/UBUNTU_DOCKER_SETUP.md`](docs/setup/UBUNTU_DOCKER_SETUP.md)
+  — stand up the Phase 1 runtime host: an Ubuntu VM with Docker Engine +
+  Compose, VM sizing, the stack skeleton, and a device-reachability check.
 
 ## Prior work
 
