@@ -14,11 +14,13 @@ import structlog
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
+from .audit import flatten_ledger
 from .bus_client import BusClient
 from .config import settings
+from .governance import risk_posture
 from .models import ChangeRequest, Device
 from .service import Service
-from .store import InMemoryChangeStore
+from .store import build_store
 
 log = structlog.get_logger(__name__)
 
@@ -42,14 +44,18 @@ class RejectBody(BaseModel):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    store = InMemoryChangeStore()
+    store = build_store()
     bus = BusClient(settings.nats_url, settings.job_subject, settings.request_timeout)
     await bus.connect()
     app.state.bus = bus
     app.state.service = Service(
         store, bus, settings.change_signing_key, settings.require_change_window
     )
-    log.info("change.ready", require_window=settings.require_change_window)
+    log.info(
+        "change.ready",
+        require_window=settings.require_change_window,
+        store=settings.change_store,
+    )
     try:
         yield
     finally:
@@ -112,3 +118,26 @@ async def apply_change(change_id: str) -> ChangeRequest:
         raise HTTPException(status_code=404, detail="change not found")
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.get("/audit")
+async def get_audit(
+    change_id: str | None = None,
+    actor: str | None = None,
+    action: str | None = None,
+    limit: int = 100,
+) -> list[dict]:
+    """Flattened, newest-first audit ledger across all changes (filterable)."""
+    return flatten_ledger(
+        app.state.service._store.list(),
+        change_id=change_id,
+        actor=actor,
+        action=action,
+        limit=limit,
+    )
+
+
+@app.get("/risk/posture")
+async def get_risk_posture() -> dict:
+    """Risk/governance posture rollup across all changes."""
+    return risk_posture(app.state.service._store.list())
