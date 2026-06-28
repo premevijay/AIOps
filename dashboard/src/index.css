@@ -1,0 +1,33 @@
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: #080B14;
+  font-family: 'IBM Plex Sans', sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+::-webkit-scrollbar { width: 9px; height: 9px; }
+::-webkit-scrollbar-thumb { background: #26324B; border-radius: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+
+@keyframes pulseDot { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+@keyframes fadeUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: .2; } }
+
+.row-h:hover { background: #141C2E !important; }
+.nav-h:hover { background: #141C2E !important; }
+.btn-h:hover { filter: brightness(1.12); }
+.chip-h:hover { border-color: #3A4D72 !important; color: #E6ECF5 !important; }
+.copy-h:hover { filter: brightness(1.2); }
+
+input { font-family: 'IBM Plex Sans', sans-serif; }
+button { font-family: 'IBM Plex Sans', sans-serif; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}

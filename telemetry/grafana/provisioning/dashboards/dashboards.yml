@@ -1,0 +1,11 @@
+# Load dashboard JSON from /var/lib/grafana/dashboards on boot.
+apiVersion: 1
+
+providers:
+  - name: aiops
+    type: file
+    disableDeletion: false
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: false

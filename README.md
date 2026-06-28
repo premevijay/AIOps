@@ -49,6 +49,14 @@ read-only by design — anything that would mutate a device is **proposed, not
 executed**, pending the change-management approval path. See the
 [supervisor README](services/supervisor/README.md).
 
+## Monitoring — telemetry stack (off Ansible)
+
+[`telemetry/`](telemetry/) is the SNMP + synthetic monitoring capability, kept
+**off Ansible** because it's continuous, not task-based: **Telegraf** (SNMP +
+ICMP/HTTP probes) → **Prometheus** → **Grafana** (pre-provisioned datasource +
+the NetOps Overview dashboard). The [`dashboard/`](dashboard/) AetherNetOps UI
+embeds those Grafana panels live in its Monitoring view via `VITE_GRAFANA_URL`.
+
 ## Prior work
 
 `AIOpsaethernetops.bundle` preserves the earlier **AetherNetOps** UI prototype
