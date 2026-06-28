@@ -25,3 +25,17 @@ class ChangeClient:
             r = await c.get(f"{self._base}/changes/{change_id}")
             r.raise_for_status()
             return r.json()
+
+    async def audit(self, params: dict | None = None) -> list[dict]:
+        """The platform's change/approval audit ledger (who did what, when)."""
+        async with httpx.AsyncClient(timeout=self._timeout) as c:
+            r = await c.get(f"{self._base}/audit", params=params or {})
+            r.raise_for_status()
+            return r.json()
+
+    async def posture(self) -> dict:
+        """Risk/governance posture aggregated across change requests."""
+        async with httpx.AsyncClient(timeout=self._timeout) as c:
+            r = await c.get(f"{self._base}/risk/posture")
+            r.raise_for_status()
+            return r.json()

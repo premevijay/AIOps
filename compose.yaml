@@ -108,9 +108,12 @@ services:
       NATS_URL: nats://bus:4222
       CHANGE_SIGNING_KEY: ${CHANGE_SIGNING_KEY:-}
       REQUIRE_CHANGE_WINDOW: ${REQUIRE_CHANGE_WINDOW:-false}
+      # durable store: postgres (state-db) by default; set memory for ephemeral
+      CHANGE_STORE: ${CHANGE_STORE:-postgres}
+      CHANGE_DB_URL: postgresql://aiops:${STATE_DB_PASSWORD:-aiops}@state-db:5432/aiops
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     ports: ["8089:8089"]
-    depends_on: [bus, worker]
+    depends_on: [bus, worker, state-db]
     restart: unless-stopped
 
   # ---- Telemetry stack (monitoring capability — OFF Ansible) ---------------

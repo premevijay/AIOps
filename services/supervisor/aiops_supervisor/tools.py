@@ -55,6 +55,37 @@ def build_tools(bus: BusClient, devices: list[dict], change: ChangeClient) -> li
         ch = await change.get(change_id)
         return f"Change {change_id}: status={ch.get('status')}, risk={ch.get('risk', {}).get('level')}."
 
+    async def _query_audit(change_id: str = "", actor: str = "", action: str = "") -> str:
+        """Audit capability: read the change/approval ledger (who did what, when)."""
+        params = {k: v for k, v in {"change_id": change_id, "actor": actor, "action": action}.items() if v}
+        params["limit"] = 20
+        entries = await change.audit(params)
+        if not entries:
+            return "No matching audit entries."
+        lines = [
+            f"- {e.get('ts')} · {e.get('actor')} {e.get('action')} on {e.get('device')} "
+            f"(change {str(e.get('change_id'))[:8]}){(' — ' + e['detail']) if e.get('detail') else ''}"
+            for e in entries[:20]
+        ]
+        return "Audit ledger (most recent):\n" + "\n".join(lines)
+
+    async def _risk_posture() -> str:
+        """Risk/Governance capability: posture across all change requests."""
+        p = await change.posture()
+        bl = p.get("by_risk_level", {})
+        bs = p.get("by_status", {})
+        ohr = p.get("open_high_risk", [])
+        rd = p.get("recent_denied", [])
+        out = [
+            f"Change posture — total {p.get('total', 0)}; "
+            f"status {bs}; risk {bl}.",
+            f"Open high/critical-risk changes: {len(ohr)}"
+            + ("".join(f"\n  - {h.get('id','')[:8]} {h.get('device')} ({h.get('level')} {h.get('score')}): {h.get('intent')}" for h in ohr[:5])),
+        ]
+        if rd:
+            out.append("Recent policy denials: " + ", ".join(f"{d.get('device')} ({'; '.join(d.get('violations', []))})" for d in rd[:5]))
+        return "\n".join(out)
+
     tools: list[StructuredTool] = [
         StructuredTool.from_function(
             name="list_devices",
@@ -75,6 +106,22 @@ def build_tools(bus: BusClient, devices: list[dict], change: ChangeClient) -> li
             name="change_status",
             description="Check the status of a change request by its id.",
             coroutine=_change_status,
+        ),
+        StructuredTool.from_function(
+            name="query_audit",
+            description=(
+                "Audit: read the change/approval audit ledger (who proposed, approved, "
+                "applied what, and when). Optional filters: change_id, actor, action."
+            ),
+            coroutine=_query_audit,
+        ),
+        StructuredTool.from_function(
+            name="risk_posture",
+            description=(
+                "Risk & governance: summarize risk posture across all change requests "
+                "— status/risk-level mix, open high-risk changes, recent policy denials."
+            ),
+            coroutine=_risk_posture,
         ),
     ]
     for op, desc in CAPABILITIES.items():

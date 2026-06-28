@@ -10,9 +10,18 @@ import asyncio
 import pytest
 
 from change_service import policy, risk, signing, window
-from change_service.models import ChangeStatus, Device
+from change_service.audit import flatten_ledger
+from change_service.governance import risk_posture
+from change_service.models import (
+    AuditEntry,
+    ChangeRequest,
+    ChangeStatus,
+    Device,
+    PolicyResult,
+    RiskResult,
+)
 from change_service.service import Service
-from change_service.store import InMemoryChangeStore
+from change_service.store import InMemoryChangeStore, build_store
 from datetime import datetime, timezone
 
 
@@ -197,3 +206,161 @@ def test_apply_failure_marks_failed():
     applied = asyncio.run(svc.apply(change.id, datetime.now(timezone.utc)))
     assert applied.status == ChangeStatus.failed
     assert applied.result["ok"] is False
+
+
+def test_put_based_persistence_records_status_and_audit():
+    # After the put-based refactor, the store always reflects the latest status
+    # and the full audit trail (the service re-puts on every transition).
+    bus = FakeBus(ok=True)
+    svc = _service(bus)
+    change = svc.create(_switch(), "noop", ["description x"], "alice")
+    svc.approve(change.id, "bob")
+    stored = svc._store.get(change.id)
+    assert stored.status == ChangeStatus.approved
+    assert [a.action for a in stored.audit] == ["created", "approved"]
+
+
+# --- store factory --------------------------------------------------------
+
+def test_build_store_defaults_to_memory(monkeypatch):
+    from change_service import store as store_mod
+
+    monkeypatch.setattr(store_mod.settings, "change_store", "memory")
+    assert isinstance(build_store(), InMemoryChangeStore)
+
+
+def test_build_store_selects_postgres(monkeypatch):
+    # We don't have a DB; just prove the factory routes to PostgresChangeStore
+    # (its __init__ then fails fast on the empty/unreachable URL).
+    from change_service import store as store_mod
+
+    monkeypatch.setattr(store_mod.settings, "change_store", "postgres")
+    monkeypatch.setattr(store_mod.settings, "change_db_url", "")
+    with pytest.raises((ValueError, RuntimeError)):
+        build_store()
+
+
+# --- audit: flatten_ledger ------------------------------------------------
+
+def _make_change(cid, device_name, intent, status, level, score, audit, *,
+                 allow=True, violations=None):
+    return ChangeRequest(
+        id=cid,
+        device=_switch(device_name),
+        intent=intent,
+        config=["description x"],
+        requested_by="alice",
+        status=status,
+        risk=RiskResult(score=score, level=level, factors=[]),
+        policy=PolicyResult(allow=allow, violations=violations or []),
+        created_at="2026-06-28T00:00:00+00:00",
+        audit=[AuditEntry(**a) for a in audit],
+    )
+
+
+def _ledger_fixture():
+    c1 = _make_change(
+        "c1", "sw-a", "intent-a", ChangeStatus.approved, "low", 10,
+        [
+            {"ts": "2026-06-28T01:00:00+00:00", "actor": "alice", "action": "created"},
+            {"ts": "2026-06-28T03:00:00+00:00", "actor": "bob", "action": "approved"},
+        ],
+    )
+    c2 = _make_change(
+        "c2", "sw-b", "intent-b", ChangeStatus.rejected, "high", 70,
+        [
+            {"ts": "2026-06-28T02:00:00+00:00", "actor": "carol", "action": "created"},
+            {"ts": "2026-06-28T04:00:00+00:00", "actor": "carol", "action": "rejected"},
+        ],
+    )
+    return [c1, c2]
+
+
+def test_flatten_ledger_newest_first_and_shape():
+    rows = flatten_ledger(_ledger_fixture())
+    ts = [r["ts"] for r in rows]
+    assert ts == sorted(ts, reverse=True)
+    top = rows[0]
+    assert set(top) == {"change_id", "device", "intent", "ts", "actor", "action", "detail"}
+    assert top["action"] == "rejected" and top["change_id"] == "c2"
+
+
+def test_flatten_ledger_filter_by_change_id():
+    rows = flatten_ledger(_ledger_fixture(), change_id="c1")
+    assert {r["change_id"] for r in rows} == {"c1"}
+    assert len(rows) == 2
+
+
+def test_flatten_ledger_filter_by_actor_and_action():
+    rows = flatten_ledger(_ledger_fixture(), actor="bob")
+    assert len(rows) == 1 and rows[0]["actor"] == "bob"
+    rows = flatten_ledger(_ledger_fixture(), action="created")
+    assert {r["action"] for r in rows} == {"created"}
+    assert len(rows) == 2
+
+
+def test_flatten_ledger_limit():
+    rows = flatten_ledger(_ledger_fixture(), limit=1)
+    assert len(rows) == 1
+    assert rows[0]["ts"] == "2026-06-28T04:00:00+00:00"  # newest survives the cap
+
+
+# --- governance: risk_posture ---------------------------------------------
+
+def _posture_fixture():
+    open_high = _make_change(
+        "h1", "core-sw", "risky", ChangeStatus.proposed, "high", 70,
+        [{"ts": "2026-06-28T01:00:00+00:00", "actor": "alice", "action": "created"}],
+    )
+    open_crit = _make_change(
+        "h2", "core-fw", "very risky", ChangeStatus.approved, "critical", 90,
+        [{"ts": "2026-06-28T01:00:00+00:00", "actor": "alice", "action": "created"}],
+    )
+    applied_high = _make_change(
+        "h3", "sw-x", "done", ChangeStatus.applied, "high", 65,
+        [{"ts": "2026-06-28T01:00:00+00:00", "actor": "alice", "action": "created"}],
+    )
+    benign = _make_change(
+        "b1", "sw-y", "benign", ChangeStatus.proposed, "low", 10,
+        [{"ts": "2026-06-28T01:00:00+00:00", "actor": "alice", "action": "created"}],
+    )
+    denied_old = _make_change(
+        "d1", "sw-z", "kill aaa", ChangeStatus.rejected, "medium", 40,
+        [{"ts": "2026-06-28T01:00:00+00:00", "actor": "policy", "action": "policy_denied"}],
+        allow=False, violations=["AAA removal denied"],
+    )
+    denied_old.created_at = "2026-06-27T00:00:00+00:00"
+    denied_new = _make_change(
+        "d2", "sw-w", "mgmt acl", ChangeStatus.rejected, "medium", 45,
+        [{"ts": "2026-06-29T01:00:00+00:00", "actor": "policy", "action": "policy_denied"}],
+        allow=False, violations=["mgmt-plane ACL"],
+    )
+    denied_new.created_at = "2026-06-29T00:00:00+00:00"
+    return [open_high, open_crit, applied_high, benign, denied_old, denied_new]
+
+
+def test_risk_posture_counts():
+    p = risk_posture(_posture_fixture())
+    assert p["total"] == 6
+    assert p["by_status"] == {
+        "proposed": 2, "approved": 1, "rejected": 2, "applied": 1, "failed": 0
+    }
+    assert p["by_risk_level"] == {"low": 1, "medium": 2, "high": 2, "critical": 1}
+
+
+def test_risk_posture_open_high_risk_selection():
+    p = risk_posture(_posture_fixture())
+    ids = {item["id"] for item in p["open_high_risk"]}
+    # h1 (proposed/high) and h2 (approved/critical) qualify; h3 is applied (closed),
+    # b1 is low risk.
+    assert ids == {"h1", "h2"}
+    for item in p["open_high_risk"]:
+        assert set(item) == {"id", "device", "intent", "level", "score"}
+
+
+def test_risk_posture_recent_denied_newest_first():
+    p = risk_posture(_posture_fixture())
+    denied_ids = [d["id"] for d in p["recent_denied"]]
+    assert denied_ids == ["d2", "d1"]  # newest created_at first
+    assert p["recent_denied"][0]["violations"] == ["mgmt-plane ACL"]
+    assert set(p["recent_denied"][0]) == {"id", "device", "intent", "violations"}

@@ -69,6 +69,14 @@ change service issues only after approval — so the guardrail is enforced in
 code, not just policy. The supervisor agent can `propose_change` but has no
 approve/apply capability.
 
+Changes and the **append-only audit ledger** persist to Postgres
+(`CHANGE_STORE=postgres`, the existing `state-db`; `memory` for ephemeral lab
+use). The **Audit** and **Risk/Governance** specialists read that data: the
+change service exposes `GET /audit` (who-did-what ledger) and
+`GET /risk/posture` (status/risk mix, open high-risk changes, recent policy
+denials), and the supervisor agent surfaces them as the `query_audit` and
+`risk_posture` tools.
+
 ## Monitoring — telemetry stack (off Ansible)
 
 [`telemetry/`](telemetry/) is the SNMP + synthetic monitoring capability, kept

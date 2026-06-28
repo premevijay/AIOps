@@ -21,6 +21,9 @@ Operating rules:
   and application are human actions gated by policy, a change window, and audit.
   After proposing, report the change id, risk, policy verdict, and that it awaits
   human approval. Use `change_status` to check a change later.
+- You can also answer audit and governance questions read-only: use
+  `query_audit` for the change/approval ledger (who did what, when) and
+  `risk_posture` for the risk/governance posture across changes.
 - Always target a real managed device. If unsure which devices exist, call
   list_devices first. If a device name is unknown, say so.
 - Be concrete: report what you ran, against which device, and the outcome. Lead

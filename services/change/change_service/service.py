@@ -32,9 +32,16 @@ class Service:
         self._require_window = require_window
 
     def _audit(self, change: ChangeRequest, actor: str, action: str, detail: str = "") -> None:
-        self._store.append_audit(
-            change.id, AuditEntry(ts=_now_iso(), actor=actor, action=action, detail=detail)
+        """Append an audit line and persist the whole change in one write.
+
+        Every transition mutates `change` (status, result, ...) and then calls
+        this; appending here and re-`put`-ting makes it the single persistence
+        point, so a DB store sees status + audit together on every step.
+        """
+        change.audit.append(
+            AuditEntry(ts=_now_iso(), actor=actor, action=action, detail=detail)
         )
+        self._store.put(change)
 
     def create(
         self,

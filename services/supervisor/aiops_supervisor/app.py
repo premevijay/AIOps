@@ -39,6 +39,7 @@ async def lifespan(app: FastAPI):
     devices = load_inventory(settings.inventory_path)
     change = ChangeClient(settings.change_url)
     app.state.bus = bus
+    app.state.devices = devices
     app.state.agent = build_agent(build_tools(bus, devices, change))
     log.info("supervisor.ready", devices=len(devices), model=settings.anthropic_model)
     try:
@@ -53,6 +54,12 @@ app = FastAPI(title="AIOps NetOps Supervisor", lifespan=lifespan)
 @app.get("/healthz")
 async def healthz() -> dict:
     return {"status": "ok"}
+
+
+@app.get("/devices")
+async def devices() -> list[dict]:
+    """The managed device inventory (read-only) — backs the dashboard Inventory view."""
+    return app.state.devices
 
 
 @app.post("/intent", response_model=IntentReply)
