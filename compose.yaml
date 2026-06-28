@@ -135,7 +135,7 @@ services:
       context: ./dashboard
       args:
         VITE_GRAFANA_URL: ${VITE_GRAFANA_URL:-http://localhost:3000}
-    ports: ["8080:80"]
+    ports: ["8081:80"]            # 8080 is taken by conjur
     depends_on: [grafana, supervisor]
     restart: unless-stopped
 

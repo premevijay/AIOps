@@ -7,6 +7,10 @@ risk/governance) that operate the on-prem device fleet, running on Dell servers.
 
 ## Where to start
 
+**Building the lab?** Follow [`docs/LAB_GUIDE.md`](docs/LAB_GUIDE.md) — a single
+ordered runbook from a bare Ubuntu VM to the full stack (device → worker →
+Conjur → AWX → agent → monitoring), with a minimal-path-first order.
+
 **Phase 0 — the target architecture map** is the current deliverable:
 
 - [`docs/architecture/AGENT_TEAM_ARCHITECTURE.md`](docs/architecture/AGENT_TEAM_ARCHITECTURE.md)
