@@ -63,6 +63,24 @@ the repo's Grafana configuration already enables both.
 > present when `npm run build` (or the Docker build) runs — not at container
 > runtime.
 
+## Backend API proxies (same-origin, no CORS)
+
+Two views talk to backend services through **same-origin** proxies, so the
+browser never makes a cross-origin request:
+
+| View                | Relative base | Prod (nginx)        | Dev (vite proxy)    |
+| ------------------- | ------------- | ------------------- | ------------------- |
+| Inventory & Vault   | `/api/agent`  | `supervisor:8088`   | `localhost:8088`    |
+| Change Management   | `/api/change` | `change:8089`       | `localhost:8089`    |
+
+The **Inventory & Vault** view fetches live devices from the supervisor at
+`GET /api/agent/devices`. In production `nginx.conf` proxies `/api/agent/` to
+`http://supervisor:8088/` (the trailing slash strips the prefix). In development
+the vite dev proxy (`vite.config.ts`) forwards `/api/agent` to
+`http://localhost:8088` with a rewrite that strips `/api/agent` — so
+`/api/agent/devices` reaches the supervisor as `/devices`. The same pattern wires
+`/api/change` to the change service.
+
 ## Container
 
 A multi-stage `Dockerfile` builds the app and serves it with nginx:
