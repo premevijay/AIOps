@@ -1,0 +1,65 @@
+# AIOps — Phase 1 connectivity spine.
+#
+# Brings up: the job bus (NATS), platform state DB (Postgres), CyberArk Conjur
+# (+ its own Postgres) for the SecretProvider, and the connectivity worker.
+#
+# First run (no Conjur account yet) works out of the box with the env secret
+# provider — set DEVICE_USERNAME / DEVICE_PASSWORD in .env. Switch to CyberArk by
+# setting SECRET_PROVIDER=cyberark once Conjur is initialized (see
+# services/worker/README.md).
+
+services:
+  bus:
+    image: nats:2.10-alpine
+    command: ["-js"]
+    ports: ["4222:4222"]
+    restart: unless-stopped
+
+  state-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: aiops
+      POSTGRES_USER: aiops
+      POSTGRES_PASSWORD: ${STATE_DB_PASSWORD:-aiops}
+    volumes: [state-db:/var/lib/postgresql/data]
+    restart: unless-stopped
+
+  conjur-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_HOST_AUTH_METHOD: trust
+    volumes: [conjur-db:/var/lib/postgresql/data]
+    restart: unless-stopped
+
+  conjur:
+    image: cyberark/conjur:1.21
+    command: server
+    environment:
+      DATABASE_URL: postgres://postgres@conjur-db/postgres
+      CONJUR_DATA_KEY: ${CONJUR_DATA_KEY}     # generate once; see worker README
+      CONJUR_ACCOUNT: ${CONJUR_ACCOUNT:-default}
+    ports: ["8080:80"]
+    depends_on: [conjur-db]
+    restart: unless-stopped
+
+  worker:
+    build: ./services/worker
+    environment:
+      NATS_URL: nats://bus:4222
+      SECRET_PROVIDER: ${SECRET_PROVIDER:-env}
+      # env provider (lab first-run)
+      DEVICE_USERNAME: ${DEVICE_USERNAME:-}
+      DEVICE_PASSWORD: ${DEVICE_PASSWORD:-}
+      DEVICE_ENABLE: ${DEVICE_ENABLE:-}
+      # cyberark provider
+      CONJUR_URL: http://conjur:80
+      CONJUR_ACCOUNT: ${CONJUR_ACCOUNT:-default}
+      CONJUR_LOGIN: ${CONJUR_LOGIN:-host/aiops-worker}
+      CONJUR_API_KEY: ${CONJUR_API_KEY:-}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    depends_on: [bus]
+    restart: unless-stopped
+
+volumes:
+  state-db: {}
+  conjur-db: {}

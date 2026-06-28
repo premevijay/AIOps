@@ -1,0 +1,15 @@
+# Sample inventory — one EVE-NG Cisco Catalyst (IOS-XE) lab device.
+# Copy to config/inventory.yaml and point mgmt_host at your lab device.
+#
+# vault_path is where this device's credentials live in CyberArk Conjur:
+#   <vault_path>/username, <vault_path>/password, <vault_path>/enable
+# (ignored when SECRET_PROVIDER=env, which uses the shared DEVICE_* creds.)
+
+devices:
+  - name: cat9k-lab-01
+    vendor: Cisco Catalyst
+    os: ios
+    type: switch
+    mgmt_host: 10.10.10.11
+    port: 22
+    vault_path: aiops/lab/cat9k-lab-01

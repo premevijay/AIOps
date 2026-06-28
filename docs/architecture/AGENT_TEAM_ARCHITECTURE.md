@@ -178,14 +178,11 @@ This is what makes a team of agents safe enough to point at production gear.
 
 ## 5. LLM & knowledge (intelligence plane internals)
 
-- **LLM runtime — a decision to confirm (Section 8).** Because the gear is
-  on-prem and often sensitive, the realistic options are (a) a self-hosted local
-  model on the Dell servers for full data isolation, or (b) a hosted frontier
-  model via the egress proxy for higher reasoning quality. Recommendation:
-  start hosted for reasoning quality during build-out, keep the runtime behind a
-  `ModelProvider` interface so it can be swapped for a local model without
-  touching agent code, and never send raw secrets/configs to any model that
-  isn't approved for that data class.
+- **LLM runtime (locked, Section 8).** A hosted frontier model via the egress
+  proxy for reasoning quality, kept behind a `ModelProvider` interface so it can
+  be swapped for a self-hosted local model later without touching agent code.
+  Raw secrets/configs are never sent to any model not approved for that data
+  class.
 - **RAG / knowledge base.** Vector store over: the versioned config repo, vendor
   documentation, internal runbooks, and historical incidents. Grounds the
   Troubleshooting and Configuration agents so they cite real state, not guesses.
@@ -200,17 +197,19 @@ This is what makes a team of agents safe enough to point at production gear.
 The agents run **beside the network they manage**, on your Dell hardware.
 
 ```
-┌──────────────────── Dell server(s) — on-prem ─────────────────────────────┐
-│  Container platform: k3s / Kubernetes (or Docker Compose to start)         │
+┌──── Dell server → Ubuntu Linux VM → Docker (Compose) — on-prem ────────────┐
+│  Phase 1: Docker Compose services on one Ubuntu VM (→ k3s for prod HA later)│
 │                                                                            │
 │  ┌── Intelligence ──┐  ┌── Platform services ──┐  ┌── Data ──┐            │
 │  │ Supervisor       │  │ API gateway           │  │ Postgres  │            │
 │  │ 10 specialists   │  │ Job bus (NATS)        │  │ Git/minio │            │
-│  │ LLM/Model proxy  │  │ Connectivity workers  │  │ Prometheus│            │
-│  │ RAG/vector DB    │  │ SecretProvider svc    │  │ Vector DB │            │
+│  │ (LangGraph)      │  │ Connectivity workers  │  │ Prometheus│            │
+│  │ Model proxy →    │  │ SecretProvider svc    │  │ Vector DB │            │
+│  │   hosted LLM     │  │                       │  │          │            │
+│  │ RAG/vector DB    │  │                       │  │          │            │
 │  └──────────────────┘  └───────────────────────┘  └──────────┘            │
 │                                                                            │
-│  Vault: HashiCorp Vault (lab/dev → HA) and/or CyberArk Conjur (container)  │
+│  Vault: CyberArk Conjur (container) first; HashiCorp Vault added later     │
 └───────────────────────────────┬────────────────────────────────────────────┘
                                 │  dedicated mgmt network / pnet bridge
                 ┌───────────────┴────────────────┐
@@ -237,7 +236,7 @@ The agents run **beside the network they manage**, on your Dell hardware.
 | Phase | Goal | Exit criteria |
 |-------|------|---------------|
 | **0 — Architecture (this doc)** | Agree the target map | This document accepted |
-| **1 — Vault + connectivity spine** | `SecretProvider` + one `DeviceDriver` (Cisco Catalyst) end-to-end in EVE-NG | Worker fetches creds from Vault, SSHes to a lab Catalyst, pulls config |
+| **1 — Vault + connectivity spine** | Docker/Compose on the Ubuntu VM + `CyberArkProvider` + one `DeviceDriver` (Cisco Catalyst) end-to-end in EVE-NG | Worker fetches creds from CyberArk, SSHes to a lab Catalyst, pulls config |
 | **2 — First capabilities, one vendor** | Backup → Compliance → Health on Catalyst | Drift detection + a passing/failing compliance scan on the lab device |
 | **3 — First agents** | Stand up Supervisor + Backup + Compliance + Monitoring agents over the normalized data | An intent routes to a specialist and returns grounded results |
 | **4 — Guardrails + change mgmt** | Policy-as-code, approval gate, audit ledger, Change agent | A gated config write executes only after approval, fully audited |
@@ -253,21 +252,17 @@ plane is what makes both cheap.
 
 ---
 
-## 8. Open decisions (need your call before Phase 1)
+## 8. Decisions (locked — 2026-06-28)
 
-These don't block the architecture map but will shape Phase 1:
+These shape Phase 1 and are now decided:
 
-1. **LLM hosting** — self-hosted local model (max data isolation) vs hosted
-   frontier model via proxy (max reasoning quality)? Default proposal: hosted
-   now, `ModelProvider` abstraction so we can swap later.
-2. **Vault** — both CyberArk *and* HashiCorp from day one, or start with one
-   (HashiCorp dev is fastest in the lab) and add the second behind the same
-   `SecretProvider` interface?
-3. **Orchestration framework** — adopt LangGraph (or similar) for the agent
-   graph, or a thin in-house orchestrator? Trade-off: ecosystem vs control.
-4. **Container platform** — k3s/Kubernetes from the start, or Docker Compose for
-   the lab and graduate to k3s for production on the Dells?
-5. **First vendor** — confirm Cisco Catalyst as the Phase 1 reference vendor.
+| # | Decision | Choice | Implication |
+|---|----------|--------|-------------|
+| 1 | **LLM hosting** | Hosted frontier model via egress proxy, behind a `ModelProvider` interface | Best reasoning quality now; local model swappable later with no agent-code change. Raw secrets/configs are never sent to a model not approved for that data class. |
+| 2 | **Vault** | **CyberArk first** (Conjur/CCP), HashiCorp added later behind the same `SecretProvider` interface | Build `CyberArkProvider` in Phase 1; `HashiCorpProvider` is a later drop-in. |
+| 3 | **Orchestration** | **LangGraph** (framework) for the supervisor/specialist graph | Use its supervisor / tool-loop / human-in-the-loop patterns; wrap our guardrail + audit hooks around it. |
+| 4 | **Runtime host** | **Docker** (Compose) on an **Ubuntu Linux VM** | Lab/Phase 1 runs as Compose services on one Ubuntu VM. See [`docs/setup/UBUNTU_DOCKER_SETUP.md`](../setup/UBUNTU_DOCKER_SETUP.md). Graduate to k3s for production HA later. |
+| 5 | **First vendor** | **Cisco Catalyst** (IOS-XE) as the Phase 1 reference | First end-to-end driver + capability target; other vendors follow by writing new drivers. |
 
 ---
 
