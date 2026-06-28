@@ -12,15 +12,19 @@
         commands: ['show running-config']
       register: _rc
 
+    # Match whole config lines, not substrings: a hardened device renders
+    # "no ip http server", which *contains* "ip http server" — a substring test
+    # would wrongly fail it. cfg_lines is the running-config, one trimmed line each.
     - name: Assert hardening baseline (Cisco IOS)
       when: ansible_network_os == 'cisco.ios.ios'
       vars:
-        cfg: "{{ _rc.stdout[0] }}"
+        cfg_lines: "{{ _rc.stdout_lines[0] | map('trim') | list }}"
       ansible.builtin.assert:
         that:
-          - "'ip http server' not in cfg"            # HTTP server disabled
-          - "'transport input telnet' not in cfg"    # no telnet
-          - "'service password-encryption' in cfg"   # password encryption on
-          - "'aaa new-model' in cfg"                  # AAA enabled
+          - "'ip http server' not in cfg_lines"            # HTTP server disabled
+          - "'ip http secure-server' not in cfg_lines"     # HTTPS server disabled
+          - "cfg_lines | select('match', '^transport input .*telnet') | list | length == 0"  # no telnet
+          - "'service password-encryption' in cfg_lines"   # password encryption on
+          - "'aaa new-model' in cfg_lines"                 # AAA enabled
         fail_msg: "{{ inventory_hostname }} FAILS the hardening baseline"
         success_msg: "{{ inventory_hostname }} passes the hardening baseline"

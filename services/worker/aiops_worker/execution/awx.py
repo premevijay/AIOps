@@ -21,6 +21,8 @@ log = structlog.get_logger(__name__)
 
 
 class AwxBackend(ExecutionBackend):
+    needs_credentials = False     # AWX injects creds via its own credential plugin
+
     def __init__(self, base_url: str, token: str, template_map: dict[str, str],
                  verify: bool = True, poll_interval: float = 3.0, timeout: float = 600.0):
         self.base_url = base_url.rstrip("/")
@@ -33,7 +35,8 @@ class AwxBackend(ExecutionBackend):
     def _headers(self) -> dict:
         return {"Authorization": f"Bearer {self.token}", "Content-Type": "application/json"}
 
-    def run(self, op: str, device: Device, params: dict, credentials: DeviceCredentials) -> dict:
+    def run(self, op: str, device: Device, params: dict,
+            credentials: DeviceCredentials | None = None) -> dict:
         import httpx  # lazy
 
         template = self.template_map.get(op)
