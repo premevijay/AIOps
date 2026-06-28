@@ -261,6 +261,7 @@ docker compose ps
 | dashboard | 8081 | AetherNetOps UI (Monitoring embeds Grafana) |
 | supervisor | 8088 | Agent API (`POST /intent`) |
 | change | 8089 | Change-management API (propose/approve/apply) |
+| results | 8090 | Job-results store (`GET /results`, `/results/latest`) |
 | grafana | 3000 | Dashboards |
 | prometheus | 9090 | Metrics store |
 | conjur | 8080 | CyberArk Conjur |

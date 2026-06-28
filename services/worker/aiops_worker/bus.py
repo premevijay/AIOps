@@ -47,6 +47,12 @@ async def run() -> None:
         result = await handle(req, secrets, executor)
         if msg.reply:
             await nc.publish(msg.reply, result.model_dump_json().encode())
+        # Fan out every result to the results store (and any other subscriber).
+        # Best-effort: a results-store outage must not fail the job reply.
+        try:
+            await nc.publish(settings.results_subject, result.model_dump_json().encode())
+        except Exception as exc:  # noqa: BLE001
+            log.warning("job.result_publish_failed", op=req.op, error=str(exc))
         log.info("job.completed", op=req.op, device=req.device.name, ok=result.ok)
 
     for op in OPS:

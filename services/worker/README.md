@@ -31,7 +31,9 @@ tests/                 # Ansible-free unit tests
    - `local` → `ansible-runner` runs `playbooks/<op>.yml` with a one-host
      inventory (group = device OS) and the creds injected as extravars.
    - `awx` → launches the mapped AWX job template and polls it to completion.
-4. The reply is a `JobResult` with the playbook/job status + stdout.
+4. The reply is a `JobResult` with the playbook/job status + stdout. The same
+   `JobResult` is also fanned out to `aiops.results` (best-effort) so the
+   results store can persist job history for the dashboard.
 
 Capabilities (`op` → playbook): `backup` / `get_config` → `backup.yml`,
 `health` → `health.yml`, `compliance` → `compliance.yml`.
