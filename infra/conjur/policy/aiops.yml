@@ -1,0 +1,44 @@
+# AIOps Conjur policy — loaded under the root policy:
+#   conjur policy load -b root -f /policy/aiops.yml
+#
+# Declares:
+#   - the worker application identity        host  aiops/aiops-worker
+#   - the device-secret tree                 aiops/lab/<device>/{username,password,enable}
+#   - a readers group + grant + permit so the worker can read those secrets
+#
+# Variable full IDs resolve relative to this policy, e.g.
+#   aiops/lab/cat9k-lab-01/username  ← matches Device.vault_path + "/username".
+# Add a device by copying the three !variable lines and the three permit
+# resources for its name.
+
+- !policy
+  id: aiops
+  body:
+    # --- application identity ------------------------------------------
+    - !host
+      id: aiops-worker
+      annotations:
+        description: AIOps connectivity worker; reads device credentials at session time.
+
+    - !group secrets-readers
+
+    - !grant
+      role: !group secrets-readers
+      member: !host aiops-worker
+
+    # --- device secret tree --------------------------------------------
+    - !policy
+      id: lab
+      body:
+        - !variable cat9k-lab-01/username
+        - !variable cat9k-lab-01/password
+        - !variable cat9k-lab-01/enable
+
+    # --- permissions ----------------------------------------------------
+    - !permit
+      role: !group secrets-readers
+      privileges: [ read, execute ]
+      resources:
+        - !variable lab/cat9k-lab-01/username
+        - !variable lab/cat9k-lab-01/password
+        - !variable lab/cat9k-lab-01/enable

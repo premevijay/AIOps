@@ -1,6 +1,8 @@
 # secrets / local config
 .env
 config/inventory.yaml
+infra/conjur/.worker-api-key
+infra/conjur/.admin-api-key
 
 # python
 __pycache__/

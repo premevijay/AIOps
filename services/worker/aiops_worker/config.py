@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     # CyberArk Conjur (used when secret_provider == "cyberark")
     conjur_url: str = "http://conjur:80"
     conjur_account: str = "default"
-    conjur_login: str = "host/aiops-worker"
+    conjur_login: str = "host/aiops/aiops-worker"
     conjur_api_key: str = ""
 
     # Env provider creds (used when secret_provider == "env"; lab only)
