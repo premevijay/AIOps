@@ -21,6 +21,15 @@ risk/governance) that operate the on-prem device fleet, running on Dell servers.
   — stand up the Phase 1 runtime host: an Ubuntu VM with Docker Engine +
   Compose, VM sizing, the stack skeleton, and a device-reachability check.
 
+## Phase 1 — connectivity spine (scaffolded)
+
+The first backend service is in [`services/worker/`](services/worker/) — a NATS
+connectivity worker that resolves credentials from a `SecretProvider` (CyberArk
+Conjur, with an env provider for first-run) and pulls config/health through a
+vendor `DeviceDriver` (Cisco Catalyst first). Bring the stack up with
+[`compose.yaml`](compose.yaml); see the
+[worker README](services/worker/README.md) to run it and enqueue a test job.
+
 ## Prior work
 
 `AIOpsaethernetops.bundle` preserves the earlier **AetherNetOps** UI prototype

@@ -1,0 +1,14 @@
+# secrets / local config
+.env
+config/inventory.yaml
+
+# python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+*.egg-info/
+
+# os
+.DS_Store
