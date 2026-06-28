@@ -177,12 +177,52 @@ python scripts/ask_supervisor.py "is cat9k-lab-01 compliant?"
 python scripts/ask_supervisor.py "back up cat9k-lab-01"
 ```
 
-The agent calls read-only tools only; anything that would change a device it
-proposes, never executes. Reference: [`services/supervisor/README.md`](../services/supervisor/README.md).
+The agent's tools are read-only plus `propose_change` — it can propose a gated
+change but cannot approve or apply it. Reference:
+[`services/supervisor/README.md`](../services/supervisor/README.md).
 
 ---
 
-## Phase 8 — Monitoring (telemetry stack + dashboard)
+## Phase 8 — Change management (gated writes)
+
+Lets an approved change actually reach a device — `propose → policy → risk →
+human approve → window → token-gated apply → audit`. Set the shared signing key
+(the worker refuses any `apply` without a token signed by it):
+
+```ini
+CHANGE_SIGNING_KEY=<openssl rand -hex 32>
+REQUIRE_CHANGE_WINDOW=false
+```
+
+```bash
+docker compose up -d --build change worker
+DEV='{"name":"cat9k-lab-01","vendor":"Cisco Catalyst","os":"ios","mgmt_host":"10.10.10.11"}'
+
+# 1) propose (agent or curl) — runs policy + risk, returns a change id
+cid=$(curl -s localhost:8089/changes -H 'content-type: application/json' \
+  -d "{\"device\":$DEV,\"intent\":\"enable HTTPS server\",\"config\":[\"ip http secure-server\"],\"requested_by\":\"you\"}" \
+  | python3 -c 'import sys,json;print(json.load(sys.stdin)["id"])')
+
+# 2) human approves
+curl -s localhost:8089/changes/$cid/approve -H 'content-type: application/json' -d '{"approver":"you"}'
+
+# 3) apply — change service signs a token; worker verifies it and runs apply_config.yml
+curl -s localhost:8089/changes/$cid/apply
+
+# audit trail
+curl -s localhost:8089/changes/$cid | python3 -m json.tool
+```
+
+A change whose config trips a policy rule (e.g. `no aaa new-model`) is created
+**rejected** and can never be approved. Reference:
+[`services/change/README.md`](../services/change/README.md).
+
+> Lab-grade: the change store + audit ledger are in-memory; move them to durable,
+> append-only storage before production.
+
+---
+
+## Phase 9 — Monitoring (telemetry stack + dashboard)
 
 Continuous SNMP + synthetic telemetry (off Ansible) → Grafana → dashboard:
 
@@ -220,6 +260,7 @@ docker compose ps
 |---------|-----------|---------|
 | dashboard | 8081 | AetherNetOps UI (Monitoring embeds Grafana) |
 | supervisor | 8088 | Agent API (`POST /intent`) |
+| change | 8089 | Change-management API (propose/approve/apply) |
 | grafana | 3000 | Dashboards |
 | prometheus | 9090 | Metrics store |
 | conjur | 8080 | CyberArk Conjur |

@@ -23,6 +23,31 @@ def test_capabilities_map_to_playbooks():
     assert OP_PLAYBOOK["backup"] == "backup.yml"
     assert OP_PLAYBOOK["health"] == "health.yml"
     assert OP_PLAYBOOK["compliance"] == "compliance.yml"
+    assert OP_PLAYBOOK["apply"] == "apply_config.yml"
+
+
+def test_apply_is_a_gated_write_op():
+    from aiops_worker.execution.base import WRITE_OPS
+    assert "apply" in WRITE_OPS
+    # read ops are not gated
+    assert "backup" not in WRITE_OPS and "health" not in WRITE_OPS
+
+
+def test_extravars_passes_apply_lines_for_writes():
+    ev = build_extravars(_device(), "/data/configs", _creds(),
+                         {"config": ["ip http secure-server"]})
+    assert ev["apply_lines"] == ["ip http secure-server"]
+    # read ops carry no apply_lines
+    assert "apply_lines" not in build_extravars(_device(), "/data/configs", _creds())
+
+
+def test_approval_token_roundtrip_and_tamper():
+    from aiops_worker.signing import sign, verify
+    tok = sign("chg-123", "k3y")
+    assert verify("chg-123", tok, "k3y") is True
+    assert verify("chg-123", tok, "wrong-key") is False     # wrong key
+    assert verify("chg-999", tok, "k3y") is False           # wrong change id
+    assert verify("chg-123", "", "k3y") is False            # missing token
 
 
 def test_inventory_groups_by_os():

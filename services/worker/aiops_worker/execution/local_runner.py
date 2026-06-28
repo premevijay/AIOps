@@ -26,7 +26,7 @@ class LocalRunnerBackend(ExecutionBackend):
 
         playbook = OP_PLAYBOOK[op]
         inventory = build_inventory(device)
-        extravars = build_extravars(device, self.config_store, credentials)
+        extravars = build_extravars(device, self.config_store, credentials, params)
 
         log.info("ansible.run", op=op, device=device.name, playbook=playbook, backend="local")
         with tempfile.TemporaryDirectory(prefix="aiops-runner-") as tmp:

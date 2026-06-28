@@ -31,13 +31,15 @@ class IntentReply(BaseModel):
 async def lifespan(app: FastAPI):
     # Imported lazily so the module loads without LangChain installed (tests).
     from .agent import build_agent
+    from .change_client import ChangeClient
     from .tools import build_tools
 
     bus = BusClient(settings.nats_url, settings.job_subject, settings.request_timeout)
     await bus.connect()
     devices = load_inventory(settings.inventory_path)
+    change = ChangeClient(settings.change_url)
     app.state.bus = bus
-    app.state.agent = build_agent(build_tools(bus, devices))
+    app.state.agent = build_agent(build_tools(bus, devices, change))
     log.info("supervisor.ready", devices=len(devices), model=settings.anthropic_model)
     try:
         yield
