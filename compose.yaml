@@ -53,7 +53,9 @@ services:
     entrypoint: ["sleep", "infinity"]
 
   worker:
-    build: ./services/worker
+    build:
+      context: .                       # repo root: image bakes in the ansible/ project
+      dockerfile: services/worker/Dockerfile
     environment:
       NATS_URL: nats://bus:4222
       SECRET_PROVIDER: ${SECRET_PROVIDER:-env}
@@ -66,10 +68,20 @@ services:
       CONJUR_ACCOUNT: ${CONJUR_ACCOUNT:-default}
       CONJUR_LOGIN: ${CONJUR_LOGIN:-host/aiops/aiops-worker}
       CONJUR_API_KEY: ${CONJUR_API_KEY:-}
+      # execution backend: local (ansible-runner) | awx
+      EXECUTION_BACKEND: ${EXECUTION_BACKEND:-local}
+      CONFIG_STORE: /data/configs
+      ANSIBLE_PROJECT_DIR: /app/ansible
+      AWX_URL: ${AWX_URL:-}
+      AWX_TOKEN: ${AWX_TOKEN:-}
+      AWX_TEMPLATES: ${AWX_TEMPLATES:-}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    volumes:
+      - configs:/data/configs          # git-versioned config store
     depends_on: [bus]
     restart: unless-stopped
 
 volumes:
   state-db: {}
   conjur-db: {}
+  configs: {}

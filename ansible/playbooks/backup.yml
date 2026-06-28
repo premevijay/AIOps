@@ -1,0 +1,77 @@
+# Backup capability — pull the running config and version it in git.
+#
+# Runs against `target` (a host or group; the worker passes the device name).
+# Per-OS pull blocks keep it vendor-neutral; add a vendor by adding one block.
+#
+#   ansible-playbook playbooks/backup.yml -e target=cat9k-lab-01
+- name: Backup running configuration
+  hosts: "{{ target | default('network') }}"
+  gather_facts: false
+  tasks:
+    - name: Pull running-config (Cisco IOS)
+      when: ansible_network_os == 'cisco.ios.ios'
+      cisco.ios.ios_command:
+        commands: ['show running-config']
+      register: _pull_ios
+
+    - name: Pull running-config (Cisco NX-OS)
+      when: ansible_network_os == 'cisco.nxos.nxos'
+      cisco.nxos.nxos_command:
+        commands: ['show running-config']
+      register: _pull_nxos
+
+    - name: Normalize pulled config
+      ansible.builtin.set_fact:
+        running_config: >-
+          {{ (_pull_ios.stdout[0] if ansible_network_os == 'cisco.ios.ios'
+              else _pull_nxos.stdout[0]) }}
+
+    - name: Ensure per-device config directory exists
+      delegate_to: localhost
+      ansible.builtin.file:
+        path: "{{ config_store }}/devices/{{ inventory_hostname }}"
+        state: directory
+        mode: '0750'
+
+    - name: Write running-config to the store
+      delegate_to: localhost
+      ansible.builtin.copy:
+        content: "{{ running_config }}\n"
+        dest: "{{ config_store }}/devices/{{ inventory_hostname }}/running.cfg"
+        mode: '0640'
+
+    - name: Seed golden baseline on first backup
+      delegate_to: localhost
+      ansible.builtin.copy:
+        content: "{{ running_config }}\n"
+        dest: "{{ config_store }}/devices/{{ inventory_hostname }}/golden.cfg"
+        mode: '0640'
+        force: false        # never overwrite an established golden
+
+    - name: Version the config in git
+      delegate_to: localhost
+      ansible.builtin.shell:
+        chdir: "{{ config_store }}"
+        cmd: |
+          set -e
+          git rev-parse --is-inside-work-tree >/dev/null 2>&1 || git init -q
+          git add "devices/{{ inventory_hostname }}/running.cfg" \
+                  "devices/{{ inventory_hostname }}/golden.cfg"
+          if ! git diff --cached --quiet; then
+            git -c user.name='AIOps Backup' -c user.email='backup@aiops.local' \
+                commit -q -m "backup({{ inventory_hostname }}): running config"
+          fi
+          git rev-parse --short HEAD
+      register: _git
+      changed_when: "'nothing to commit' not in _git.stdout"
+
+    - name: Report revision + drift vs golden
+      delegate_to: localhost
+      vars:
+        running_path: "{{ config_store }}/devices/{{ inventory_hostname }}/running.cfg"
+        golden_path: "{{ config_store }}/devices/{{ inventory_hostname }}/golden.cfg"
+      ansible.builtin.debug:
+        msg:
+          device: "{{ inventory_hostname }}"
+          revision: "{{ _git.stdout_lines[-1] | default('') }}"
+          drift: "{{ (lookup('file', running_path) != lookup('file', golden_path)) }}"

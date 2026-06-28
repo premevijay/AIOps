@@ -27,6 +27,17 @@ class Settings(BaseSettings):
     device_password: str = ""
     device_enable: str = ""
 
+    # Execution backend: "local" (ansible-runner) or "awx" (AWX job templates)
+    execution_backend: str = "local"
+    ansible_project_dir: str = "/app/ansible"
+    config_store: str = "/data/configs"
+
+    # AWX (used when execution_backend == "awx")
+    awx_url: str = ""
+    awx_token: str = ""
+    awx_templates: str = ""                   # "backup=12,health=13,compliance=14"
+    awx_verify_ssl: bool = True
+
     log_level: str = "INFO"
 
 

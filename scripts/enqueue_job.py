@@ -3,8 +3,9 @@
 
 Usage (from inside the worker network, or with NATS_URL pointing at it):
 
-    python scripts/enqueue_job.py health   --device cat9k-lab-01
-    python scripts/enqueue_job.py backup   --device cat9k-lab-01
+    python scripts/enqueue_job.py health      --device cat9k-lab-01
+    python scripts/enqueue_job.py backup      --device cat9k-lab-01
+    python scripts/enqueue_job.py compliance  --device cat9k-lab-01
 
 Devices are read from config/inventory.example.yaml unless --inventory is given.
 Requires: pip install nats-py pyyaml
@@ -24,7 +25,7 @@ import yaml
 
 async def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("op", choices=["health", "backup", "get_config"])
+    ap.add_argument("op", choices=["health", "backup", "compliance", "get_config"])
     ap.add_argument("--device", required=True)
     ap.add_argument("--inventory", default="config/inventory.example.yaml")
     ap.add_argument("--nats", default=os.environ.get("NATS_URL", "nats://127.0.0.1:4222"))

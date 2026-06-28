@@ -1,0 +1,26 @@
+# Health-check capability — gather facts and surface key health signals.
+#   ansible-playbook playbooks/health.yml -e target=cat9k-lab-01
+- name: Health check
+  hosts: "{{ target | default('network') }}"
+  gather_facts: false
+  tasks:
+    - name: Gather facts (Cisco IOS)
+      when: ansible_network_os == 'cisco.ios.ios'
+      cisco.ios.ios_facts:
+        gather_subset: ['hardware', 'default']
+
+    - name: Gather facts (Cisco NX-OS)
+      when: ansible_network_os == 'cisco.nxos.nxos'
+      cisco.nxos.nxos_facts:
+        gather_subset: ['hardware', 'default']
+
+    - name: Report health snapshot
+      ansible.builtin.debug:
+        msg:
+          device: "{{ inventory_hostname }}"
+          model: "{{ ansible_net_model | default('?') }}"
+          version: "{{ ansible_net_version | default('?') }}"
+          serial: "{{ ansible_net_serialnum | default('?') }}"
+          uptime: "{{ ansible_net_uptime | default('?') }}"
+          mem_free_mb: "{{ ((ansible_net_memfree_mb | default(0)) | int) }}"
+          mem_total_mb: "{{ ((ansible_net_memtotal_mb | default(0)) | int) }}"

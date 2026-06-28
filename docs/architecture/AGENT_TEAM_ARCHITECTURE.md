@@ -35,11 +35,12 @@ Target fleet (from the original requirement):
 
 ---
 
-## 2. The five planes (platform the agents stand on)
+## 2. The planes (platform the agents stand on)
 
 Everything below the agents is shared infrastructure. The agents never talk to a
-device directly — they call platform services, which gives us one place to
-enforce auth, audit, rate-limiting, and vendor normalization.
+device directly — they launch **Ansible** through AWX (and read telemetry from
+the monitoring stack), which gives us one place to enforce auth, audit,
+scheduling, approvals, and vendor coverage.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
@@ -60,16 +61,19 @@ enforce auth, audit, rate-limiting, and vendor normalization.
 └───────────────────────────────┬───────────────────────────────────────────┘
                                 │
 ┌───────────────────────────────┴───────────────────────────────────────────┐
-│  CONNECTIVITY PLANE                                                         │
-│  Async job bus (NATS/Kafka/Redis)  →  worker pool                          │
-│  One DeviceDriver per vendor behind a common interface                     │
-│  Netmiko/NAPALM/Scrapli (CLI)  ·  PAN-OS/FortiOS/CheckPoint/F5/AVI REST    │
+│  EXECUTION PLANE  (task-based device ops — Ansible)                         │
+│  AWX (control plane: RBAC · audit · scheduling · approvals · creds)         │
+│  Job templates → Ansible playbooks → vendor collections                     │
+│  (lab: ansible-runner in the worker, same playbooks · NATS job bus)         │
+│                                                                            │
+│  TELEMETRY PATH  (streaming — NOT Ansible)                                  │
+│  Telegraf/snmp_exporter → Prometheus/InfluxDB   ·   synthetic probes        │
 └───────────────────────────────┬───────────────────────────────────────────┘
                                 │
 ┌───────────────────────────────┴───────────────────────────────────────────┐
 │  SECRETS PLANE  (consulted on every device session)                        │
-│  SecretProvider interface → CyberArkProvider · HashiCorpProvider           │
-│  Short-lived creds / signed SSH certs · never persisted · every fetch logged│
+│  SecretProvider / AWX credential → CyberArk (Conjur) · HashiCorp (later)   │
+│  Short-lived creds · never persisted · every fetch logged                  │
 └───────────────────────────────┬───────────────────────────────────────────┘
                                 │
                     ┌──────────┴───────────┐
@@ -80,15 +84,18 @@ enforce auth, audit, rate-limiting, and vendor normalization.
 
 Two non-negotiable cross-cutting rules:
 
-1. **Vault on every session.** A worker requests a short-lived secret from
-   CyberArk/HashiCorp at connect time, uses it for that session only, never
-   stores it, and the fetch is audited. Build `SecretProvider` first — it is a
-   dependency of literally every other capability.
-2. **Normalize at the driver.** Each `DeviceDriver` implements the same ~8
-   methods (`backup()`, `get_config()`, `run_check()`, `apply_config()`,
-   `poll()`, `health()`, `diff()`, `rollback()`) and returns a **vendor-neutral
-   model**, so nothing above the connectivity plane knows or cares whether the
-   box is a Catalyst or a FortiGate.
+1. **Vault on every session.** Device credentials come from CyberArk at run time
+   (the worker's `SecretProvider` in the lab; an AWX CyberArk Conjur credential
+   in production), are used for that session only, never stored, and every fetch
+   is audited. Secrets are a dependency of every capability — build them first.
+2. **Ansible is the execution engine; the OS is the only vendor seam.** Every
+   task-based operation (backup, compliance, health, config, change, audit,
+   automation) is an **Ansible playbook** run by AWX, using the vendor
+   collection for the device's OS (`cisco.ios`, `cisco.nxos`, `paloaltonetworks.panos`,
+   `fortinet.fortios`, `check_point.mgmt`, `f5networks.f5_modules`, `vmware.alb`…).
+   **Adding a vendor = installing a collection + a per-OS block**, not writing a
+   driver. Streaming telemetry (SNMP/synthetic) is the exception — it stays on
+   the telemetry path, not Ansible.
 
 ---
 
@@ -126,10 +133,17 @@ write requires approval + change window.
 | 9 | **Troubleshooting / RCA** | Diagnostic loop, root-cause analysis, correlates metrics+config+logs, proposes fix | `snmp.poll`, `config.diff`, `health.check`, `log.search`, `remediate.propose*` | R+W* |
 | 10 | **Risk & Governance** | Risk posture, vuln/CVE correlation to fleet, policy-as-code, guardrail authoring | `risk.assess`, `cve.correlate`, `policy.author`, `posture.report` | R |
 
+The tool names above are logical capabilities. Concretely, a device-touching
+tool is an **AWX job template** the agent launches (e.g. `compliance.scan` →
+launch the `aiops-compliance` template, scoped by RBAC); read-only data tools
+query the data/telemetry plane. AWX is the choke point where the guardrails,
+approvals, and audit in Section 4 are enforced — the agents don't run Ansible or
+touch devices themselves.
+
 **Why one agent per domain (not one mega-agent):** smaller, scoped toolbelts
 mean tighter guardrails, clearer audit attribution ("the Change agent did X"),
-independent iteration, and the ability to give each agent only the device
-permissions it needs. It mirrors how a real NetOps team is staffed.
+independent iteration, and the ability to give each agent only the AWX templates
+it needs. It mirrors how a real NetOps team is staffed.
 
 ### 3.3 How the team coordinates (example flow)
 
@@ -236,7 +250,7 @@ The agents run **beside the network they manage**, on your Dell hardware.
 | Phase | Goal | Exit criteria |
 |-------|------|---------------|
 | **0 — Architecture (this doc)** | Agree the target map | This document accepted |
-| **1 — Vault + connectivity spine** | Docker/Compose on the Ubuntu VM + `CyberArkProvider` + one `DeviceDriver` (Cisco Catalyst) end-to-end in EVE-NG | Worker fetches creds from CyberArk, SSHes to a lab Catalyst, pulls config |
+| **1 — Vault + execution spine** | Docker/Compose on the Ubuntu VM + `CyberArkProvider` + Ansible (`cisco.ios`) run by the worker via ansible-runner against a lab Catalyst | Worker fetches creds from CyberArk and runs `backup.yml` end-to-end in EVE-NG |
 | **2 — First capabilities, one vendor** | Backup → Compliance → Health on Catalyst | Drift detection + a passing/failing compliance scan on the lab device |
 | **3 — First agents** | Stand up Supervisor + Backup + Compliance + Monitoring agents over the normalized data | An intent routes to a specialist and returns grounded results |
 | **4 — Guardrails + change mgmt** | Policy-as-code, approval gate, audit ledger, Change agent | A gated config write executes only after approval, fully audited |
@@ -244,11 +258,11 @@ The agents run **beside the network they manage**, on your Dell hardware.
 | **6 — Firewalls** | Palo Alto, FTD, Check Point, FortiGate drivers | Capabilities + agents pass on firewalls |
 | **7 — Load balancers** | F5, AVI drivers | Full on-prem fleet covered |
 | **8 — Troubleshooting + Risk/Governance agents** | RCA loop + risk posture over the full fleet | End-to-end incident flow (Section 3.3) works in the lab |
-| **9 — Cloud** | Extend connectivity plane to cloud network constructs | First cloud target onboarded |
+| **9 — Cloud** | Extend the execution plane to cloud network constructs (cloud Ansible collections) | First cloud target onboarded |
 
-Guiding principle: **add a vendor = write one driver**; **add a capability =
-extend the agents, not the drivers**. The normalization in the connectivity
-plane is what makes both cheap.
+Guiding principle: **add a vendor = install a collection + a per-OS playbook
+block**; **add a capability = a new playbook + job template the agents can
+launch**. Ansible's vendor coverage is what makes both cheap.
 
 ---
 
@@ -259,10 +273,12 @@ These shape Phase 1 and are now decided:
 | # | Decision | Choice | Implication |
 |---|----------|--------|-------------|
 | 1 | **LLM hosting** | Hosted frontier model via egress proxy, behind a `ModelProvider` interface | Best reasoning quality now; local model swappable later with no agent-code change. Raw secrets/configs are never sent to a model not approved for that data class. |
-| 2 | **Vault** | **CyberArk first** (Conjur/CCP), HashiCorp added later behind the same `SecretProvider` interface | Build `CyberArkProvider` in Phase 1; `HashiCorpProvider` is a later drop-in. |
-| 3 | **Orchestration** | **LangGraph** (framework) for the supervisor/specialist graph | Use its supervisor / tool-loop / human-in-the-loop patterns; wrap our guardrail + audit hooks around it. |
+| 2 | **Vault** | **CyberArk first** (Conjur/CCP), HashiCorp added later behind the same `SecretProvider` interface | `CyberArkProvider` in the worker (lab); an AWX CyberArk Conjur credential in production. |
+| 3 | **Orchestration** | **LangGraph** (framework) for the supervisor/specialist graph | Use its supervisor / tool-loop / human-in-the-loop patterns; the agents' tools launch AWX job templates. |
 | 4 | **Runtime host** | **Docker** (Compose) on an **Ubuntu Linux VM** | Lab/Phase 1 runs as Compose services on one Ubuntu VM. See [`docs/setup/UBUNTU_DOCKER_SETUP.md`](../setup/UBUNTU_DOCKER_SETUP.md). Graduate to k3s for production HA later. |
-| 5 | **First vendor** | **Cisco Catalyst** (IOS-XE) as the Phase 1 reference | First end-to-end driver + capability target; other vendors follow by writing new drivers. |
+| 5 | **First vendor** | **Cisco Catalyst** (IOS-XE) as the Phase 1 reference | First playbooks target IOS; other vendors follow by adding a collection + per-OS block. |
+| 6 | **Execution engine** | **Ansible**, run by **AWX** (open-source) | All task-based ops are playbooks; AWX gives RBAC/audit/scheduling/approvals/creds. Lab runs the same playbooks via `ansible-runner` in the worker. See [`docs/setup/AWX_SETUP.md`](../setup/AWX_SETUP.md). |
+| 7 | **Pivot scope** | **Ansible-primary; telemetry stays direct** | Ansible owns backup/compliance/health/config/change/audit/automation. The NAPALM `DeviceDriver` is **retired**. SNMP/synthetic monitoring stays on Telegraf/Prometheus. |
 
 ---
 

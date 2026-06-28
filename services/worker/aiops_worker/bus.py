@@ -13,21 +13,23 @@ import nats
 import structlog
 
 from .config import settings
+from .execution import OP_PLAYBOOK, build_executor
 from .handlers import handle
 from .models import JobRequest, JobResult
 from .secrets import build_secret_provider
 
 log = structlog.get_logger(__name__)
 
-# Read ops this worker serves.
-OPS = ("backup", "get_config", "health", "diff")
+# Capabilities this worker serves (each maps to a playbook).
+OPS = tuple(OP_PLAYBOOK)
 
 
 async def run() -> None:
     secrets = build_secret_provider()
+    executor = build_executor()
     nc = await nats.connect(settings.nats_url)
-    log.info("worker.connected", nats=settings.nats_url,
-             provider=settings.secret_provider, ops=list(OPS))
+    log.info("worker.connected", nats=settings.nats_url, provider=settings.secret_provider,
+             backend=settings.execution_backend, ops=list(OPS))
 
     async def on_message(msg) -> None:
         try:
@@ -40,7 +42,7 @@ async def run() -> None:
             return
 
         log.info("job.received", op=req.op, device=req.device.name)
-        result = await handle(req, secrets)
+        result = await handle(req, secrets, executor)
         if msg.reply:
             await nc.publish(msg.reply, result.model_dump_json().encode())
         log.info("job.completed", op=req.op, device=req.device.name, ok=result.ok)

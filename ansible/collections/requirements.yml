@@ -1,0 +1,26 @@
+# Vendor coverage for the fleet — this is the "add a vendor = install a
+# collection" win that made Ansible the execution engine. Installed into
+# ansible/collections by `ansible-galaxy collection install -r` (the worker
+# Dockerfile does this; AWX installs them from this same file).
+collections:
+  # shared networking plumbing (network_cli, netconf, cli_parse)
+  - name: ansible.netcommon
+  - name: ansible.utils
+
+  # switching
+  - name: cisco.ios          # Catalyst (IOS-XE) — Phase 1 reference vendor
+  - name: cisco.nxos         # Nexus (NX-OS)
+  # SD-WAN: cEdge uses cisco.ios; vManage automation via cisco.sdwan (add when needed)
+
+  # firewalls
+  - name: paloaltonetworks.panos
+  - name: cisco.asa          # FTD via ASA/REST patterns
+  - name: check_point.mgmt   # Check Point management API
+  - name: fortinet.fortios
+
+  # load balancers
+  - name: f5networks.f5_modules
+  - name: vmware.alb         # AVI / NSX ALB
+
+  # secrets — read device creds from CyberArk Conjur at runtime
+  - name: cyberark.conjur
