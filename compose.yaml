@@ -97,7 +97,51 @@ services:
     depends_on: [bus, worker]
     restart: unless-stopped
 
+  # ---- Telemetry stack (monitoring capability — OFF Ansible) ---------------
+  # Telegraf polls SNMP + runs synthetic probes -> Prometheus -> Grafana.
+  telegraf:
+    image: telegraf:1.32
+    environment:
+      SNMP_COMMUNITY: ${SNMP_COMMUNITY:-public}
+    volumes:
+      - ./telemetry/telegraf/telegraf.conf:/etc/telegraf/telegraf.conf:ro
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    volumes:
+      - ./telemetry/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    ports: ["9090:9090"]
+    depends_on: [telegraf]
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:11.2.0
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+    volumes:
+      - ./telemetry/grafana/grafana.ini:/etc/grafana/grafana.ini:ro
+      - ./telemetry/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./telemetry/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    ports: ["3000:3000"]
+    depends_on: [prometheus]
+    restart: unless-stopped
+
+  # AetherNetOps dashboard — embeds the Grafana panels in its Monitoring view.
+  dashboard:
+    build:
+      context: ./dashboard
+      args:
+        VITE_GRAFANA_URL: ${VITE_GRAFANA_URL:-http://localhost:3000}
+    ports: ["8080:80"]
+    depends_on: [grafana, supervisor]
+    restart: unless-stopped
+
 volumes:
   state-db: {}
   conjur-db: {}
   configs: {}
+  prometheus-data: {}
+  grafana-data: {}
