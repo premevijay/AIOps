@@ -12,12 +12,18 @@ import time
 
 import structlog
 
+from .config import settings
 from .execution import OP_PLAYBOOK
-from .execution.base import ExecutionBackend
+from .execution.base import WRITE_OPS, ExecutionBackend
 from .models import JobRequest, JobResult
 from .secrets.base import SecretProvider
+from .signing import verify
 
 log = structlog.get_logger(__name__)
+
+
+def _ms(start: float) -> int:
+    return int((time.monotonic() - start) * 1000)
 
 
 async def handle(req: JobRequest, secrets: SecretProvider | None,
@@ -26,6 +32,19 @@ async def handle(req: JobRequest, secrets: SecretProvider | None,
     try:
         if req.op not in OP_PLAYBOOK:
             raise ValueError(f"unknown op: {req.op!r}")
+
+        # The gate: device-mutating ops require a valid approval token issued by
+        # the change-management service. No token (or a bad one) => refused.
+        if req.op in WRITE_OPS:
+            change_id = req.params.get("change_id", "")
+            token = req.params.get("approval_token", "")
+            if not verify(change_id, token, settings.change_signing_key):
+                log.warning("write.blocked", op=req.op, device=req.device.name, change_id=change_id)
+                return JobResult(
+                    op=req.op, device_name=req.device.name, ok=False,
+                    error="unapproved write blocked: missing or invalid approval token",
+                    duration_ms=_ms(start),
+                )
         # Only resolve creds when the backend needs them (local injects them as
         # extravars; AWX injects its own and runs with secrets=None).
         creds = None

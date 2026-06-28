@@ -21,6 +21,9 @@ class Settings(BaseSettings):
     job_subject: str = "aiops.jobs"
     request_timeout: float = 600.0
 
+    # Change-management service (propose/check changes)
+    change_url: str = "http://change:8089"
+
     # Inventory the agent can act on
     inventory_path: str = "/app/inventory.yaml"
 

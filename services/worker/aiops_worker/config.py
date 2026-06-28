@@ -27,6 +27,10 @@ class Settings(BaseSettings):
     device_password: str = ""
     device_enable: str = ""
 
+    # Shared HMAC key with the change-management service. Gates `apply` writes:
+    # an apply job with no/invalid token signed by this key is refused.
+    change_signing_key: str = ""
+
     # Execution backend: "local" (ansible-runner) or "awx" (AWX job templates)
     execution_backend: str = "local"
     ansible_project_dir: str = "/app/ansible"

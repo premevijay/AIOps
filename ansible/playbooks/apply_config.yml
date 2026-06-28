@@ -1,0 +1,42 @@
+# Apply capability — push approved config lines to a device. GATED.
+#
+# This is the only device-MUTATING playbook. The worker refuses to run it
+# without a valid HMAC approval token from the change-management service, so it
+# only ever executes for a human-approved change inside its window.
+#
+# `apply_lines` is the list of config lines from the approved ChangeRequest.
+#   ansible-playbook playbooks/apply_config.yml -e target=cat9k-lab-01 \
+#     -e '{"apply_lines": ["ip http secure-server"]}'
+- name: Apply approved configuration
+  hosts: "{{ target | default('network') }}"
+  gather_facts: false
+  tasks:
+    - name: Refuse to run without approved config lines
+      ansible.builtin.assert:
+        that:
+          - apply_lines is defined
+          - apply_lines | length > 0
+        fail_msg: "apply_lines is empty — nothing approved to apply"
+
+    - name: Apply config (Cisco IOS)
+      when: ansible_network_os == 'cisco.ios.ios'
+      cisco.ios.ios_config:
+        lines: "{{ apply_lines }}"
+        save_when: modified
+      register: _apply_ios
+
+    - name: Apply config (Cisco NX-OS)
+      when: ansible_network_os == 'cisco.nxos.nxos'
+      cisco.nxos.nxos_config:
+        lines: "{{ apply_lines }}"
+        save_when: modified
+      register: _apply_nxos
+
+    - name: Report result
+      ansible.builtin.debug:
+        msg:
+          device: "{{ inventory_hostname }}"
+          changed: >-
+            {{ (_apply_ios.changed if ansible_network_os == 'cisco.ios.ios'
+                else _apply_nxos.changed) | default(false) }}
+          lines: "{{ apply_lines | length }}"

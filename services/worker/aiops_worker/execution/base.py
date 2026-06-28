@@ -21,7 +21,12 @@ OP_PLAYBOOK: dict[str, str] = {
     "get_config": "backup.yml",
     "health": "health.yml",
     "compliance": "compliance.yml",
+    "apply": "apply_config.yml",     # GATED: requires a valid approval token (see handlers)
 }
+
+# Device-mutating ops. These are refused unless accompanied by a valid HMAC
+# approval token issued by the change-management service.
+WRITE_OPS: frozenset[str] = frozenset({"apply"})
 
 
 def build_inventory(device: Device) -> dict:
@@ -47,16 +52,24 @@ def build_inventory(device: Device) -> dict:
     }
 
 
-def build_extravars(device: Device, config_store: str, credentials: DeviceCredentials) -> dict:
+def build_extravars(device: Device, config_store: str, credentials: DeviceCredentials,
+                    params: dict | None = None) -> dict:
     """Per-run variables, including the creds the worker fetched from CyberArk.
-    Consumed by group_vars/<os>.yml. (AWX supplies creds itself and ignores these.)"""
-    return {
+    Consumed by group_vars/<os>.yml. (AWX supplies creds itself and ignores these.)
+
+    For the `apply` op, the approved config lines are passed through as
+    `apply_lines` for apply_config.yml.
+    """
+    ev = {
         "target": device.name,
         "config_store": config_store,
         "device_username": credentials.username,
         "device_password": credentials.password,
         "device_enable": credentials.enable or "",
     }
+    if params and params.get("config"):
+        ev["apply_lines"] = params["config"]
+    return ev
 
 
 class ExecutionBackend(ABC):

@@ -53,6 +53,22 @@ read-only by design — anything that would mutate a device is **proposed, not
 executed**, pending the change-management approval path. See the
 [supervisor README](services/supervisor/README.md).
 
+## Change management — the gated-write path
+
+[`services/change/`](services/change/) is the human-approval authority for any
+device-mutating change:
+
+```
+agent/operator ──propose──▶ policy-as-code ──▶ risk score ──▶ HUMAN approve
+                                                                    │
+                       audit ◀── apply (Ansible) ◀── change window ◀┘
+```
+
+The worker refuses to run the `apply` playbook without a valid HMAC token the
+change service issues only after approval — so the guardrail is enforced in
+code, not just policy. The supervisor agent can `propose_change` but has no
+approve/apply capability.
+
 ## Monitoring — telemetry stack (off Ansible)
 
 [`telemetry/`](telemetry/) is the SNMP + synthetic monitoring capability, kept

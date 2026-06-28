@@ -1,0 +1,8 @@
+[project]
+name = "aiops-change"
+version = "0.1.0"
+description = "AIOps Change Management — the human-approval authority for device-mutating changes"
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
