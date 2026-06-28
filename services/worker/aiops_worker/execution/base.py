@@ -60,8 +60,14 @@ def build_extravars(device: Device, config_store: str, credentials: DeviceCreden
 
 
 class ExecutionBackend(ABC):
+    #: Whether this backend needs the worker to resolve device credentials. The
+    #: local backend injects them as extravars; AWX injects its own, so it sets
+    #: this False (and the worker skips the SecretProvider entirely).
+    needs_credentials: bool = True
+
     @abstractmethod
-    def run(self, op: str, device: Device, params: dict, credentials: DeviceCredentials) -> dict:
+    def run(self, op: str, device: Device, params: dict,
+            credentials: DeviceCredentials | None) -> dict:
         """Run the playbook for `op` against `device`. Returns a dict with at
         least {ok: bool, status: str, stdout: str}."""
         raise NotImplementedError

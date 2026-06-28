@@ -47,3 +47,14 @@ def test_awx_template_map_parsing():
         "backup": "12", "health": "13", "compliance": "14",
     }
     assert parse_template_map("") == {}
+
+
+def test_backend_credential_requirements():
+    # AWX injects its own creds, so the worker must skip the SecretProvider;
+    # the local backend needs them. Guard the wiring that an AWX-only deploy
+    # (no DEVICE_*) depends on to start.
+    from aiops_worker.execution.awx import AwxBackend
+    from aiops_worker.execution.local_runner import LocalRunnerBackend
+
+    assert AwxBackend("http://awx", "tok", {}).needs_credentials is False
+    assert LocalRunnerBackend("/app/ansible", "/data/configs").needs_credentials is True

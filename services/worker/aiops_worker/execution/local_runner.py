@@ -36,15 +36,23 @@ class LocalRunnerBackend(ExecutionBackend):
                 playbook=playbook,
                 inventory=inventory,
                 extravars=extravars,
-                envvars={"ANSIBLE_CONFIG": f"{self.project_dir}/ansible.cfg",
-                         "CONFIG_STORE": self.config_store},
+                envvars={
+                    "ANSIBLE_CONFIG": f"{self.project_dir}/ansible.cfg",
+                    "ANSIBLE_COLLECTIONS_PATH": f"{self.project_dir}/collections",
+                    "CONFIG_STORE": self.config_store,
+                },
                 quiet=True,
             )
-        ok = r.status == "successful" and r.rc == 0
+            # Read everything off `r` BEFORE the temp dir (which holds the stdout
+            # artifact) is cleaned up at the end of the with-block.
+            status, rc = r.status, r.rc
+            stats = getattr(r, "stats", None)
+            stdout = (r.stdout.read() if r.stdout else "")[-20000:]
+
         return {
-            "ok": ok,
-            "status": r.status,
-            "rc": r.rc,
-            "stats": getattr(r, "stats", None),
-            "stdout": (r.stdout.read() if r.stdout else "")[-20000:],
+            "ok": status == "successful" and rc == 0,
+            "status": status,
+            "rc": rc,
+            "stats": stats,
+            "stdout": stdout,
         }
