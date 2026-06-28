@@ -25,8 +25,10 @@ OPS = tuple(OP_PLAYBOOK)
 
 
 async def run() -> None:
-    secrets = build_secret_provider()
     executor = build_executor()
+    # Skip the SecretProvider entirely when the backend handles its own creds
+    # (AWX) — otherwise an AWX-only deployment with no DEVICE_* set fails to start.
+    secrets = build_secret_provider() if executor.needs_credentials else None
     nc = await nats.connect(settings.nats_url)
     log.info("worker.connected", nats=settings.nats_url, provider=settings.secret_provider,
              backend=settings.execution_backend, ops=list(OPS))

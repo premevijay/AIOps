@@ -41,6 +41,7 @@ Device creds resolve in priority order (see `group_vars/ios.yml`):
 
 ```bash
 cd ansible
+export ANSIBLE_COLLECTIONS_PATH="$PWD/collections"
 ansible-galaxy collection install -r collections/requirements.yml -p collections
 export DEVICE_USERNAME=admin DEVICE_PASSWORD=... CONFIG_STORE=/tmp/configs
 ansible-playbook playbooks/backup.yml -e target=cat9k-lab-01

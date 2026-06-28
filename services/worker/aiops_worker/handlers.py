@@ -20,14 +20,17 @@ from .secrets.base import SecretProvider
 log = structlog.get_logger(__name__)
 
 
-async def handle(req: JobRequest, secrets: SecretProvider, executor: ExecutionBackend) -> JobResult:
+async def handle(req: JobRequest, secrets: SecretProvider | None,
+                 executor: ExecutionBackend) -> JobResult:
     start = time.monotonic()
     try:
         if req.op not in OP_PLAYBOOK:
             raise ValueError(f"unknown op: {req.op!r}")
-        # The local backend injects these creds as extravars; the AWX backend
-        # ignores them (AWX injects its own). Cheap to fetch either way.
-        creds = await secrets.get_device_credentials(req.device)
+        # Only resolve creds when the backend needs them (local injects them as
+        # extravars; AWX injects its own and runs with secrets=None).
+        creds = None
+        if executor.needs_credentials and secrets is not None:
+            creds = await secrets.get_device_credentials(req.device)
         data = await asyncio.to_thread(executor.run, req.op, req.device, req.params, creds)
         return JobResult(
             op=req.op,
