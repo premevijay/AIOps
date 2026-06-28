@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
-  titles, devices as seedDevices, seedChanges, seedAudit,
-  buildDevice, type ViewId, type MonTab, type Device, type ChangeRequest, type AuditEntry, type Vendor,
+  titles, devices as seedDevices,
+  buildDevice, type ViewId, type MonTab, type Device, type Vendor,
 } from './data'
 import type { DeviceType } from './theme'
 import { Sidebar } from './components/Sidebar'
@@ -29,8 +29,9 @@ export default function App() {
 
   // Lifted, mutable app state
   const [devices, setDevices] = useState<Device[]>(seedDevices)
-  const [changes, setChanges] = useState<ChangeRequest[]>(seedChanges)
-  const [audit, setAudit] = useState<AuditEntry[]>(seedAudit)
+  // Live pending-change count, driven by the Change Management view from the
+  // real change service.
+  const [pending, setPending] = useState(0)
 
   const goto = (v: ViewId) => {
     setView(v)
@@ -38,12 +39,11 @@ export default function App() {
   }
   const selected = selectedId ? devices.find((d) => d.name === selectedId) ?? null : null
   const [title, sub] = titles[view]
-  const pendingChanges = changes.filter((c) => c.status === 'Pending').length
 
-  // Live nav badges (agent demo badge + live pending-change count)
+  // Live nav badges (live pending-change count from the change service)
   const badges = useMemo<Partial<Record<ViewId, string>>>(
-    () => ({ changes: pendingChanges ? String(pendingChanges) : undefined }),
-    [pendingChanges],
+    () => ({ changes: pending ? String(pending) : undefined }),
+    [pending],
   )
 
   // Global keyboard: Cmd/Ctrl+K toggles palette; Esc closes the topmost overlay.
@@ -62,21 +62,6 @@ export default function App() {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [paletteOpen, onbOpen, selectedId])
-
-  // Change Management actions
-  function decideChange(id: string, approve: boolean) {
-    setChanges((cs) => cs.map((c) => {
-      if (c.id !== id) return c
-      return { ...c, status: approve ? (c.window.toLowerCase().includes('immediate') ? 'Applied' : 'Approved') : 'Rejected' }
-    }))
-    const c = changes.find((x) => x.id === id)
-    if (c) {
-      setAudit((a) => [
-        { time: 'just now', actor: 'operator · nkapoor', text: `${approve ? 'Approved' : 'Rejected'} ${c.id} — ${c.title}${approve ? ' (staged to Vault)' : ''}`, color: approve ? '#34D399' : '#F87171' },
-        ...a,
-      ])
-    }
-  }
 
   // Onboarding completion → real device in inventory
   function onboardDevice(vendor: Vendor, onb: Parameters<typeof buildDevice>[1]) {
@@ -112,14 +97,7 @@ export default function App() {
           {view === 'health' && <Health goAgent={() => goto('agent')} />}
           {view === 'monitoring' && <Monitoring monTab={monTab} setMonTab={setMonTab} />}
           {view === 'agent' && <Agent />}
-          {view === 'changes' && (
-            <ChangeManagement
-              changes={changes}
-              audit={audit}
-              onApprove={(id) => decideChange(id, true)}
-              onReject={(id) => decideChange(id, false)}
-            />
-          )}
+          {view === 'changes' && <ChangeManagement onPendingCount={setPending} />}
         </div>
       </main>
 

@@ -5,6 +5,23 @@ that presents a multi-vendor, AI-assisted network operations console (overview,
 inventory, topology, monitoring, compliance, backup, change management, and an
 agent view).
 
+## Change Management service
+
+The **Change Management** view talks to the real change-management service over
+a same-origin proxy at the relative base **`/api/change`** (so there is no CORS
+to configure):
+
+- **Dev:** the Vite dev server proxies `/api/change/*` to
+  `http://localhost:8089/*` (see `server.proxy` in `vite.config.ts`), so the
+  `change` service must be reachable at **`localhost:8089`**.
+- **Prod:** nginx proxies `location /api/change/` to `http://change:8089/`
+  (see `nginx.conf`), so under compose the `change` service must be reachable
+  at **`change:8089`**.
+
+If the service is unreachable the view shows a friendly "Change service
+unreachable" state instead of crashing. The sidebar's Change Management badge
+shows the live count of `proposed` changes from the service.
+
 ## Develop locally
 
 ```bash
