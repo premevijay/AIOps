@@ -40,6 +40,15 @@ ansible-runner (or launches AWX job templates). Bring the stack up with
 [`compose.yaml`](compose.yaml); see the
 [worker README](services/worker/README.md) to run it and enqueue a test job.
 
+## The first agent — NetOps Supervisor
+
+[`services/supervisor/`](services/supervisor/) is a **LangGraph** agent (hosted
+Claude model behind a `ModelProvider` seam) that turns a natural-language intent
+into read-only capability calls on the worker (`POST /intent`). Its tools are
+read-only by design — anything that would mutate a device is **proposed, not
+executed**, pending the change-management approval path. See the
+[supervisor README](services/supervisor/README.md).
+
 ## Prior work
 
 `AIOpsaethernetops.bundle` preserves the earlier **AetherNetOps** UI prototype

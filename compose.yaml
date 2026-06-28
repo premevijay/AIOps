@@ -81,6 +81,22 @@ services:
     depends_on: [bus]
     restart: unless-stopped
 
+  # NetOps Supervisor — the first agent. Routes intents to capability tools that
+  # run jobs on the worker. Needs ANTHROPIC_API_KEY + ANTHROPIC_MODEL.
+  supervisor:
+    build: ./services/supervisor
+    environment:
+      NATS_URL: nats://bus:4222
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-}
+      INVENTORY_PATH: /app/inventory.yaml
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    ports: ["8088:8088"]
+    volumes:
+      - ./config/inventory.example.yaml:/app/inventory.yaml:ro
+    depends_on: [bus, worker]
+    restart: unless-stopped
+
 volumes:
   state-db: {}
   conjur-db: {}
