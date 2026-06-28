@@ -53,21 +53,18 @@ python scripts/enqueue_job.py backup  --device cat9k-lab-01
 
 ## Switch to CyberArk Conjur
 
+One command, via the bootstrap in [`../../infra/conjur/`](../../infra/conjur/):
+
 ```bash
-# 1. one-time data key
-docker run --rm cyberark/conjur:1.21 data-key generate   # -> put in .env CONJUR_DATA_KEY
+docker run --rm cyberark/conjur:1.21 data-key generate   # -> .env CONJUR_DATA_KEY
 docker compose up -d conjur conjur-db
-
-# 2. create the account + admin api key
-docker compose exec conjur conjurctl account create default
-
-# 3. load a policy granting host/aiops-worker read on aiops/lab/* variables,
-#    set the device's username/password/enable variables, then:
-#    SECRET_PROVIDER=cyberark and CONJUR_API_KEY=<worker host api key> in .env
+./infra/conjur/bootstrap.sh                              # account + policy + creds
+# put the printed worker key in .env (SECRET_PROVIDER=cyberark, CONJUR_API_KEY=...)
 docker compose up -d worker
 ```
 
-(Policy + variable-load steps will be scripted in `infra/conjur/` next.)
+See [`infra/conjur/README.md`](../../infra/conjur/README.md) for the policy
+layout and how to add more devices.
 
 ## Tests
 
