@@ -12,6 +12,12 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api\/change/, ''),
       },
+      // Same-origin proxy to the supervisor (inventory). /api/agent/devices -> :8088/devices
+      '/api/agent': {
+        target: 'http://localhost:8088',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/agent/, ''),
+      },
     },
   },
 })
