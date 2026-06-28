@@ -1,0 +1,6 @@
+# Connection settings for Cisco Nexus (NX-OS). Mirrors ios.yml; proves a second
+# vendor is just connection vars + a per-OS block in the playbooks.
+ansible_network_os: cisco.nxos.nxos
+ansible_connection: ansible.netcommon.network_cli
+ansible_user: "{{ device_username | default(lookup('env', 'DEVICE_USERNAME')) }}"
+ansible_password: "{{ device_password | default(lookup('env', 'DEVICE_PASSWORD')) }}"

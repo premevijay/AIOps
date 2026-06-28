@@ -1,0 +1,2 @@
+# Where versioned configs are written (git-backed store, a Docker volume).
+config_store: "{{ lookup('env', 'CONFIG_STORE') | default('/data/configs', true) }}"

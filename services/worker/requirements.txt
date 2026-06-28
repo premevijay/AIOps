@@ -1,7 +1,8 @@
-napalm==5.0.0
-netmiko==4.4.0
+ansible-core==2.17.4
+ansible-runner==2.4.0
 nats-py==2.9.0
 httpx==0.27.2
 pydantic==2.9.2
 pydantic-settings==2.5.2
 structlog==24.4.0
+pyyaml==6.0.2

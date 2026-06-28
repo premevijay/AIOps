@@ -1,0 +1,18 @@
+# Connection settings for Cisco IOS-XE (Catalyst).
+ansible_network_os: cisco.ios.ios
+ansible_connection: ansible.netcommon.network_cli
+
+# Credentials. Two sources, in priority order:
+#   1. extravars injected by the worker (device_username/password/enable),
+#      which the worker fetched from CyberArk via its SecretProvider — lab path.
+#   2. env fallback (DEVICE_USERNAME/...), handy for running playbooks by hand.
+#
+# Production / AWX path: attach a Machine credential + a CyberArk Conjur
+# credential plugin to the job template instead, or read directly, e.g.:
+#   ansible_password: "{{ lookup('cyberark.conjur.conjur_variable',
+#                          'aiops/lab/' ~ inventory_hostname ~ '/password') }}"
+ansible_user: "{{ device_username | default(lookup('env', 'DEVICE_USERNAME')) }}"
+ansible_password: "{{ device_password | default(lookup('env', 'DEVICE_PASSWORD')) }}"
+ansible_become: true
+ansible_become_method: enable
+ansible_become_password: "{{ device_enable | default(lookup('env', 'DEVICE_ENABLE')) | default(omit) }}"

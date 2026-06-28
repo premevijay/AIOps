@@ -1,8 +1,8 @@
-"""Job handlers — turn a JobRequest into a driver call and a JobResult.
+"""Job handlers — resolve creds, then run the capability playbook via the
+configured execution backend (ansible-runner locally, or AWX in production).
 
-The worker stays thin: resolve creds via the SecretProvider, resolve the driver
-via the registry, run the requested read op. Device I/O is blocking (SSH/API), so
-it runs in a thread to keep the asyncio event loop responsive.
+Ansible execution is blocking, so it runs in a thread to keep the asyncio event
+loop responsive.
 """
 
 from __future__ import annotations
@@ -12,24 +12,29 @@ import time
 
 import structlog
 
-from .drivers import get_driver
+from .execution import OP_PLAYBOOK
+from .execution.base import ExecutionBackend
 from .models import JobRequest, JobResult
 from .secrets.base import SecretProvider
 
 log = structlog.get_logger(__name__)
 
 
-async def handle(req: JobRequest, secrets: SecretProvider) -> JobResult:
+async def handle(req: JobRequest, secrets: SecretProvider, executor: ExecutionBackend) -> JobResult:
     start = time.monotonic()
     try:
+        if req.op not in OP_PLAYBOOK:
+            raise ValueError(f"unknown op: {req.op!r}")
+        # The local backend injects these creds as extravars; the AWX backend
+        # ignores them (AWX injects its own). Cheap to fetch either way.
         creds = await secrets.get_device_credentials(req.device)
-        driver = get_driver(req.device, creds)
-        data = await asyncio.to_thread(_run_op, driver, req)
+        data = await asyncio.to_thread(executor.run, req.op, req.device, req.params, creds)
         return JobResult(
             op=req.op,
             device_name=req.device.name,
-            ok=True,
+            ok=bool(data.get("ok")),
             data=data,
+            error=None if data.get("ok") else f"playbook status={data.get('status')}",
             duration_ms=int((time.monotonic() - start) * 1000),
         )
     except Exception as exc:  # noqa: BLE001 - surface any failure as a result
@@ -41,17 +46,3 @@ async def handle(req: JobRequest, secrets: SecretProvider) -> JobResult:
             error=f"{type(exc).__name__}: {exc}",
             duration_ms=int((time.monotonic() - start) * 1000),
         )
-
-
-def _run_op(driver, req: JobRequest) -> dict:
-    """Blocking driver dispatch. Runs in a worker thread."""
-    if req.op in ("backup", "get_config"):
-        result = driver.backup() if req.op == "backup" else driver.get_config()
-        return result.model_dump()
-    if req.op == "health":
-        return driver.health().model_dump()
-    if req.op == "diff":
-        old = req.params.get("old", "")
-        new = req.params.get("new", "")
-        return {"diff": driver.diff(old, new)}
-    raise ValueError(f"unknown op: {req.op!r}")

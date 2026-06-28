@@ -1,0 +1,18 @@
+# Static lab inventory. The worker also generates a one-host inventory per job
+# (group = device.os), so this file is mainly for running playbooks by hand and
+# as the AWX inventory source. Groups are keyed by network OS so group_vars/<os>
+# sets the right connection vars.
+all:
+  children:
+    network:
+      children:
+        ios:
+          hosts:
+            cat9k-lab-01:
+              ansible_host: 10.10.10.11
+        nxos:
+          hosts: {}
+        panos:
+          hosts: {}
+        fortios:
+          hosts: {}

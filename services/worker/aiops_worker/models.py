@@ -1,8 +1,8 @@
-"""Vendor-neutral domain models shared across drivers, secrets, and jobs.
+"""Vendor-neutral domain models shared across execution, secrets, and jobs.
 
-Everything above the connectivity plane speaks these models, never raw
-vendor-specific structures. Adding a vendor means writing a driver that maps
-into these types — not changing anything that consumes them.
+Everything above the execution plane speaks these models. A device's OS selects
+the Ansible group (and thus connection vars/collection); nothing here is
+vendor-specific.
 """
 
 from __future__ import annotations
@@ -24,7 +24,7 @@ class Device(BaseModel):
 
     name: str
     vendor: str                      # e.g. "Cisco Catalyst"
-    os: str                          # driver key, e.g. "ios", "nxos", "panos"
+    os: str                          # ansible group / network_os key: ios, nxos, panos
     type: DeviceType = DeviceType.switch
     mgmt_host: str                   # mgmt IP or DNS name
     port: int = 22
@@ -44,36 +44,21 @@ class DeviceCredentials(BaseModel):
         return {"username": self.username, "password": "***", "enable": "***" if self.enable else ""}
 
 
-class ConfigResult(BaseModel):
-    """Result of a config pull / backup."""
-
-    device_name: str
-    running: str
-    startup: str | None = None
-    # Stable identifier the Backup agent uses to commit/version (set by caller).
-    revision: str | None = None
-
-
-class HealthResult(BaseModel):
-    """Normalized health snapshot."""
-
-    device_name: str
-    reachable: bool
-    facts: dict = Field(default_factory=dict)        # vendor/os/uptime/model/serial...
-    metrics: dict = Field(default_factory=dict)      # cpu/mem/temp/env...
-    score: int | None = None                          # 0-100, computed by caller/agent
-
-
 class JobRequest(BaseModel):
-    """A unit of work the supervisor/agents put on the bus for a worker."""
+    """A unit of work the supervisor/agents put on the bus for a worker.
 
-    op: str                          # backup | get_config | health | diff
+    `op` is a capability (backup | get_config | health | compliance) that the
+    execution backend maps to an Ansible playbook / AWX job template.
+    """
+
+    op: str
     device: Device
     params: dict = Field(default_factory=dict)
 
 
 class JobResult(BaseModel):
-    """The worker's reply for a JobRequest."""
+    """The worker's reply for a JobRequest. `data` carries the backend result
+    (playbook status/stdout/stats, or AWX job id/status/stdout)."""
 
     op: str
     device_name: str

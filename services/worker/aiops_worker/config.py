@@ -19,13 +19,24 @@ class Settings(BaseSettings):
     # CyberArk Conjur (used when secret_provider == "cyberark")
     conjur_url: str = "http://conjur:80"
     conjur_account: str = "default"
-    conjur_login: str = "host/aiops-worker"
+    conjur_login: str = "host/aiops/aiops-worker"
     conjur_api_key: str = ""
 
     # Env provider creds (used when secret_provider == "env"; lab only)
     device_username: str = ""
     device_password: str = ""
     device_enable: str = ""
+
+    # Execution backend: "local" (ansible-runner) or "awx" (AWX job templates)
+    execution_backend: str = "local"
+    ansible_project_dir: str = "/app/ansible"
+    config_store: str = "/data/configs"
+
+    # AWX (used when execution_backend == "awx")
+    awx_url: str = ""
+    awx_token: str = ""
+    awx_templates: str = ""                   # "backup=12,health=13,compliance=14"
+    awx_verify_ssl: bool = True
 
     log_level: str = "INFO"
 

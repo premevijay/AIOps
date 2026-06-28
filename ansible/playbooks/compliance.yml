@@ -1,0 +1,26 @@
+# Compliance capability — assert a hardening baseline against the running config.
+# Example CIS-flavored checks for IOS; extend with your golden policy + framework
+# controls (CIS/PCI/NIST). A failed assert marks the device non-compliant.
+#   ansible-playbook playbooks/compliance.yml -e target=cat9k-lab-01
+- name: Compliance baseline
+  hosts: "{{ target | default('network') }}"
+  gather_facts: false
+  tasks:
+    - name: Pull running-config (Cisco IOS)
+      when: ansible_network_os == 'cisco.ios.ios'
+      cisco.ios.ios_command:
+        commands: ['show running-config']
+      register: _rc
+
+    - name: Assert hardening baseline (Cisco IOS)
+      when: ansible_network_os == 'cisco.ios.ios'
+      vars:
+        cfg: "{{ _rc.stdout[0] }}"
+      ansible.builtin.assert:
+        that:
+          - "'ip http server' not in cfg"            # HTTP server disabled
+          - "'transport input telnet' not in cfg"    # no telnet
+          - "'service password-encryption' in cfg"   # password encryption on
+          - "'aaa new-model' in cfg"                  # AAA enabled
+        fail_msg: "{{ inventory_hostname }} FAILS the hardening baseline"
+        success_msg: "{{ inventory_hostname }} passes the hardening baseline"
