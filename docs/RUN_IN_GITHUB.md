@@ -30,17 +30,21 @@ forwarded port is **private to you**. To share it, right-click port 8081 ▸
 | 8081 | Dashboard (AetherNetOps UI) — opens automatically | ✅ |
 | 8089 | Change-management API | ✅ |
 | 8090 | Results store API (`/results`, `/results/latest`) | ✅ |
-| 8088 | Supervisor agent API (`POST /intent`, `GET /devices`) | needs keys (below) |
+| 8088 | Supervisor API (`/devices`, `/run`, `/intent`) | ✅ |
 | 3000 | Grafana | start manually |
 | 9090 | Prometheus | start manually |
 
-### Light up the agent + inventory + monitoring views (optional)
+The supervisor now boots **without** an LLM key, so the **Inventory** view and
+the dashboard's **Run backup/health/compliance** buttons work out of the box
+(they call `/devices` and `/run`, no model needed).
 
-The supervisor isn't auto-started because it needs an LLM key. To enable the
-**AI Troubleshooting** and **Inventory** views:
+### Light up the AI + monitoring views (optional)
+
+Only the **AI Troubleshooting** view (`/intent`) needs a model. Add keys and
+restart the supervisor:
 
 ```bash
-# add to .env, then start the supervisor
+# add to .env, then restart the supervisor
 #   ANTHROPIC_API_KEY=sk-...
 #   ANTHROPIC_MODEL=<a current Claude model id>
 #   CHANGE_SIGNING_KEY=$(openssl rand -hex 32)

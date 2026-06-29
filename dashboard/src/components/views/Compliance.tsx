@@ -1,29 +1,27 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { latestResults, statusColor, relativeTime, type ResultRecord } from '../../resultsApi'
 import { Icon } from '../../charts'
 import { card, sectionTitle } from '../ui'
+import { RunControl } from '../RunControl'
 
 export function Compliance() {
   const [records, setRecords] = useState<ResultRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    let alive = true
-    ;(async () => {
-      try {
-        const latest = await latestResults()
-        if (!alive) return
-        setRecords(latest.filter((r) => r.op === 'compliance'))
-        setError(null)
-      } catch {
-        if (alive) setError('Results store unreachable — is it running?')
-      } finally {
-        if (alive) setLoading(false)
-      }
-    })()
-    return () => { alive = false }
+  const refresh = useCallback(async () => {
+    try {
+      const latest = await latestResults()
+      setRecords(latest.filter((r) => r.op === 'compliance'))
+      setError(null)
+    } catch {
+      setError('Results store unreachable — is it running?')
+    } finally {
+      setLoading(false)
+    }
   }, [])
+
+  useEffect(() => { void refresh() }, [refresh])
 
   const rows = useMemo(
     () => [...records].sort((a, b) => (a.ts < b.ts ? 1 : -1)),
@@ -58,9 +56,9 @@ export function Compliance() {
       )}
 
       <div style={card}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 14, flexWrap: 'wrap' }}>
           <div style={sectionTitle}>Compliance Results</div>
-          <span style={{ fontSize: 11.5, color: '#7A88A3' }}>live · results store</span>
+          <RunControl op="compliance" label="Run compliance" onDone={refresh} />
         </div>
 
         {loading && <div style={{ fontSize: 12.5, color: '#7A88A3', padding: '12px 2px' }}>Loading compliance results…</div>}
