@@ -18,6 +18,12 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api\/agent/, ''),
       },
+      // Same-origin proxy to the results store. /api/results/results/latest -> :8090/results/latest
+      '/api/results': {
+        target: 'http://localhost:8090',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/results/, ''),
+      },
     },
   },
 })
