@@ -17,6 +17,8 @@
     "8080": { "label": "CyberArk Conjur" },
     "4222": { "label": "NATS job bus" }
   },
-  "postCreateCommand": "test -f .env || cp .env.example .env",
+  "onCreateCommand": "test -f .env || cp .env.example .env",
+  "postCreateCommand": "docker compose up -d --build --no-deps bus state-db worker change results dashboard",
+  "postStartCommand": "docker compose up -d --no-deps bus state-db worker change results dashboard",
   "remoteUser": "vscode"
 }
