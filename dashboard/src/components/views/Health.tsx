@@ -1,92 +1,106 @@
-import { healthKpis, healthCategories, healthDevices, healthChecks, healthDetailDevice } from '../../data'
-import { Ring, Icon } from '../../charts'
+import { useEffect, useMemo, useState } from 'react'
+import { latestResults, statusColor, relativeTime, type ResultRecord } from '../../resultsApi'
+import { Icon } from '../../charts'
 import { card, sectionTitle } from '../ui'
 
 export function Health({ goAgent }: { goAgent: () => void }) {
+  const [records, setRecords] = useState<ResultRecord[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let alive = true
+    ;(async () => {
+      try {
+        const latest = await latestResults()
+        if (!alive) return
+        setRecords(latest.filter((r) => r.op === 'health'))
+        setError(null)
+      } catch {
+        if (alive) setError('Results store unreachable — is it running?')
+      } finally {
+        if (alive) setLoading(false)
+      }
+    })()
+    return () => { alive = false }
+  }, [])
+
+  const rows = useMemo(
+    () => [...records].sort((a, b) => (a.ts < b.ts ? 1 : -1)),
+    [records],
+  )
+
+  const kpis = useMemo(() => {
+    const healthy = records.filter((r) => r.status === 'ok').length
+    const failed = records.filter((r) => r.status === 'failed').length
+    const devices = new Set(records.map((r) => r.device))
+    const newest = records.reduce<string | null>((acc, r) => (acc == null || r.ts > acc ? r.ts : acc), null)
+    return [
+      { label: 'Healthy', value: String(healthy), color: '#34D399', sub: 'devices reporting ok' },
+      { label: 'Failed', value: String(failed), color: '#F87171', sub: 'health checks failing' },
+      { label: 'Devices checked', value: String(devices.size), color: '#5E9BFF', sub: 'distinct devices' },
+      { label: 'Last check', value: newest ? relativeTime(newest) : '—', color: '#A78BFA', sub: 'most recent check' },
+    ]
+  }, [records])
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14 }}>
-        {healthKpis.map((k) => (
-          <div key={k.label} style={{ ...card, borderRadius: 13, padding: 16 }}>
-            <div style={{ fontSize: 11.5, color: '#7A88A3', marginBottom: 9 }}>{k.label}</div>
-            <div style={{ fontFamily: 'Space Grotesk', fontWeight: 700, fontSize: 26, color: k.color }}>{k.value}</div>
-            <div style={{ fontSize: 11, color: '#5C6B85', marginTop: 6 }}>{k.sub}</div>
-          </div>
-        ))}
-      </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.35fr', gap: 16, alignItems: 'start' }}>
-        <div style={card}>
-          <div style={{ ...sectionTitle, marginBottom: 15 }}>Check Categories</div>
-          {healthCategories.map((c) => (
-            <div key={c.name} style={{ padding: '11px 0', borderBottom: '1px solid #141C2E' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-                <div style={{ width: 30, height: 30, borderRadius: 8, background: '#15233A', display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 'none' }}>
-                  <Icon d={c.icon} size={15} stroke={c.color} width={2} />
-                </div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 12.5, fontWeight: 500 }}>{c.name}</div>
-                  <div style={{ fontSize: 10.5, color: '#5C6B85' }}>{c.detail}</div>
-                </div>
-                <span style={{ fontFamily: 'Space Grotesk', fontWeight: 700, fontSize: 14, color: c.color }}>{c.pctLabel}</span>
-              </div>
-              <div style={{ height: 6, borderRadius: 5, background: '#0A0F1E', overflow: 'hidden' }}>
-                <div style={{ width: `${c.pct}%`, height: '100%', background: c.color }} />
-              </div>
+      {!loading && !error && records.length > 0 && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14 }}>
+          {kpis.map((k) => (
+            <div key={k.label} style={{ ...card, borderRadius: 13, padding: 16 }}>
+              <div style={{ fontSize: 11.5, color: '#7A88A3', marginBottom: 9 }}>{k.label}</div>
+              <div style={{ fontFamily: 'Space Grotesk', fontWeight: 700, fontSize: 26, color: k.color }}>{k.value}</div>
+              <div style={{ fontSize: 11, color: '#5C6B85', marginTop: 6 }}>{k.sub}</div>
             </div>
           ))}
         </div>
-
-        <div style={card}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 }}>
-            <div style={sectionTitle}>Devices Needing Attention</div>
-            <span style={{ fontSize: 11.5, color: '#7A88A3' }}>sorted by health score</span>
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 11 }}>
-            {healthDevices.map((d) => (
-              <div key={d.device} className="row-h" onClick={goAgent} style={{ display: 'flex', alignItems: 'center', gap: 13, background: '#0A0F1E', border: '1px solid #1B2740', borderRadius: 11, padding: '12px 14px', cursor: 'pointer', transition: 'background .12s' }}>
-                <div style={{ flex: 'none' }}><Ring pct={d.score} color={d.ringColor} /></div>
-                <div style={{ width: 28, height: 28, borderRadius: 7, background: d.iconBg, display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 'none' }}>
-                  <Icon d={d.icon} size={14} stroke={d.iconFg} width={2} />
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontFamily: 'IBM Plex Mono', fontSize: 12.5, fontWeight: 500 }}>{d.device}</div>
-                  <div style={{ fontSize: 11, color: '#9DA9C0', marginTop: 2 }}>{d.top}</div>
-                </div>
-                <span style={{ fontSize: 11, fontWeight: 600, color: d.sevColor, background: d.sevBg, padding: '3px 9px', borderRadius: 6 }}>{d.sev}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
+      )}
 
       <div style={card}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-          <div style={sectionTitle}>Health Check Detail</div>
-          <span style={{ fontFamily: 'IBM Plex Mono', fontSize: 12, color: '#5E9BFF', background: 'rgba(94,155,255,.1)', padding: '2px 9px', borderRadius: 6 }}>{healthDetailDevice}</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+          <div style={sectionTitle}>Health Results</div>
+          <span style={{ fontSize: 11.5, color: '#7A88A3' }}>live · results store</span>
           <div style={{ flex: 1 }} />
           <button className="btn-h" onClick={goAgent} style={{ display: 'flex', alignItems: 'center', gap: 7, background: 'linear-gradient(135deg,#5E9BFF,#A78BFA)', color: '#06122B', border: 'none', borderRadius: 8, padding: '8px 13px', fontWeight: 600, fontSize: 12, cursor: 'pointer' }}>
             <Icon d="M12 3l1.9 5.8H20l-4.9 3.6 1.9 5.8L12 14.6 7 18.2l1.9-5.8L4 8.8h6.1z" size={13} stroke="currentColor" width={2.2} />
             Troubleshoot with AI
           </button>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 18 }}>
-          {healthChecks.map((g) => (
-            <div key={g.cat}>
-              <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '.4px', color: '#7A88A3', fontWeight: 600, marginBottom: 8 }}>{g.cat}</div>
-              {g.items.map((it, i) => (
-                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '8px 0', borderBottom: '1px solid #141C2E' }}>
-                  <span style={{ width: 7, height: 7, borderRadius: '50%', background: it.color, flex: 'none' }} />
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 11.5, color: '#C7D3EA', lineHeight: 1.3 }}>{it.name}</div>
-                    <div style={{ fontSize: 10, color: '#5C6B85', fontFamily: 'IBM Plex Mono' }}>{it.val}</div>
-                  </div>
-                  <span style={{ fontSize: 9.5, fontWeight: 700, color: it.color }}>{it.state}</span>
-                </div>
-              ))}
+
+        {loading && <div style={{ fontSize: 12.5, color: '#7A88A3', padding: '12px 2px' }}>Loading health results…</div>}
+
+        {!loading && error && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12.5, color: '#F87171', background: 'rgba(248,113,113,.08)', border: '1px solid #3A1D24', borderRadius: 10, padding: '12px 14px' }}>
+            <Icon d="M12 9v4M12 17v0M10.3 3.9L2 18a2 2 0 001.7 3h16.6a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z" size={15} stroke="#F87171" width={2} />
+            {error}
+          </div>
+        )}
+
+        {!loading && !error && rows.length === 0 && (
+          <div style={{ fontSize: 12.5, color: '#7A88A3', padding: '12px 2px' }}>No health results yet — run a health check to populate this view.</div>
+        )}
+
+        {!loading && !error && rows.length > 0 && (
+          <>
+            <div style={{ display: 'grid', gridTemplateColumns: '1.2fr .9fr 2fr .8fr', gap: 12, padding: '0 4px 10px', borderBottom: '1px solid #1B2740', fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '.4px', color: '#5C6B85', fontWeight: 600 }}>
+              <span>Device</span><span>Status</span><span>Summary</span><span>When</span>
             </div>
-          ))}
-        </div>
+            {rows.map((r) => {
+              const sc = statusColor(r.status)
+              return (
+                <div key={r.id} style={{ display: 'grid', gridTemplateColumns: '1.2fr .9fr 2fr .8fr', gap: 12, padding: '11px 4px', borderBottom: '1px solid #141C2E', alignItems: 'center' }}>
+                  <span style={{ fontFamily: 'IBM Plex Mono', fontSize: 12, color: '#E6ECF5', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.device}</span>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 600, color: sc }}>
+                    <span style={{ width: 7, height: 7, borderRadius: '50%', background: sc, flex: 'none' }} />{r.status}
+                  </span>
+                  <span style={{ fontSize: 11.5, color: '#9DA9C0' }}>{r.summary}</span>
+                  <span style={{ fontSize: 11.5, color: '#5C6B85' }} title={r.ts}>{relativeTime(r.ts)}</span>
+                </div>
+              )
+            })}
+          </>
+        )}
       </div>
     </div>
   )

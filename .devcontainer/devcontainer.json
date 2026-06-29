@@ -1,0 +1,24 @@
+{
+  "name": "AIOps",
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu-24.04",
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {},
+    "ghcr.io/devcontainers/features/python:1": { "version": "3.12" },
+    "ghcr.io/devcontainers/features/node:1": { "version": "20" }
+  },
+  "forwardPorts": [8081, 8088, 8089, 8090, 3000, 9090, 8080, 4222],
+  "portsAttributes": {
+    "8081": { "label": "Dashboard (AetherNetOps)", "onAutoForward": "openBrowser" },
+    "8088": { "label": "Supervisor agent API" },
+    "8089": { "label": "Change-management API" },
+    "8090": { "label": "Results store API" },
+    "3000": { "label": "Grafana" },
+    "9090": { "label": "Prometheus" },
+    "8080": { "label": "CyberArk Conjur" },
+    "4222": { "label": "NATS job bus" }
+  },
+  "onCreateCommand": "test -f .env || cp .env.example .env",
+  "postCreateCommand": "docker compose up -d --build --no-deps bus state-db worker change results dashboard",
+  "postStartCommand": "docker compose up -d --no-deps bus state-db worker change results dashboard",
+  "remoteUser": "vscode"
+}

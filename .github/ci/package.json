@@ -1,0 +1,9 @@
+{
+  "name": "aiops-ci-screenshots",
+  "private": true,
+  "type": "module",
+  "description": "Headless dashboard screenshotter for CI artifacts",
+  "dependencies": {
+    "playwright": "1.48.2"
+  }
+}
