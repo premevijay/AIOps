@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { latestResults, recentResults, statusColor, relativeTime, type ResultRecord } from '../../resultsApi'
 import { Icon } from '../../charts'
 import { card, sectionTitle } from '../ui'
+import { RunControl } from '../RunControl'
 
 const BACKUP_OPS = new Set(['backup', 'get_config'])
 
@@ -11,26 +12,23 @@ export function Backup() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    let alive = true
-    ;(async () => {
-      try {
-        const [latest, activity] = await Promise.all([
-          latestResults(),
-          recentResults({ op: 'backup', limit: 20 }),
-        ])
-        if (!alive) return
-        setRecords(latest.filter((r) => BACKUP_OPS.has(r.op)))
-        setRecent(activity)
-        setError(null)
-      } catch {
-        if (alive) setError('Results store unreachable — is it running?')
-      } finally {
-        if (alive) setLoading(false)
-      }
-    })()
-    return () => { alive = false }
+  const refresh = useCallback(async () => {
+    try {
+      const [latest, activity] = await Promise.all([
+        latestResults(),
+        recentResults({ op: 'backup', limit: 20 }),
+      ])
+      setRecords(latest.filter((r) => BACKUP_OPS.has(r.op)))
+      setRecent(activity)
+      setError(null)
+    } catch {
+      setError('Results store unreachable — is it running?')
+    } finally {
+      setLoading(false)
+    }
   }, [])
+
+  useEffect(() => { void refresh() }, [refresh])
 
   const kpis = useMemo(() => {
     const devices = new Set(records.map((r) => r.device))
@@ -70,9 +68,9 @@ export function Backup() {
       )}
 
       <div style={card}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 14, flexWrap: 'wrap' }}>
           <div style={sectionTitle}>Backup Results</div>
-          <span style={{ fontSize: 11.5, color: '#7A88A3' }}>live · results store</span>
+          <RunControl op="backup" label="Run backup" onDone={refresh} />
         </div>
 
         {loading && <div style={{ fontSize: 12.5, color: '#7A88A3', padding: '12px 2px' }}>Loading backup results…</div>}

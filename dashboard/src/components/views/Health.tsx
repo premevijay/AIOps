@@ -1,29 +1,27 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { latestResults, statusColor, relativeTime, type ResultRecord } from '../../resultsApi'
 import { Icon } from '../../charts'
 import { card, sectionTitle } from '../ui'
+import { RunControl } from '../RunControl'
 
 export function Health({ goAgent }: { goAgent: () => void }) {
   const [records, setRecords] = useState<ResultRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    let alive = true
-    ;(async () => {
-      try {
-        const latest = await latestResults()
-        if (!alive) return
-        setRecords(latest.filter((r) => r.op === 'health'))
-        setError(null)
-      } catch {
-        if (alive) setError('Results store unreachable — is it running?')
-      } finally {
-        if (alive) setLoading(false)
-      }
-    })()
-    return () => { alive = false }
+  const refresh = useCallback(async () => {
+    try {
+      const latest = await latestResults()
+      setRecords(latest.filter((r) => r.op === 'health'))
+      setError(null)
+    } catch {
+      setError('Results store unreachable — is it running?')
+    } finally {
+      setLoading(false)
+    }
   }, [])
+
+  useEffect(() => { void refresh() }, [refresh])
 
   const rows = useMemo(
     () => [...records].sort((a, b) => (a.ts < b.ts ? 1 : -1)),
@@ -58,10 +56,10 @@ export function Health({ goAgent }: { goAgent: () => void }) {
       )}
 
       <div style={card}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14, flexWrap: 'wrap' }}>
           <div style={sectionTitle}>Health Results</div>
-          <span style={{ fontSize: 11.5, color: '#7A88A3' }}>live · results store</span>
           <div style={{ flex: 1 }} />
+          <RunControl op="health" label="Run health" onDone={refresh} />
           <button className="btn-h" onClick={goAgent} style={{ display: 'flex', alignItems: 'center', gap: 7, background: 'linear-gradient(135deg,#5E9BFF,#A78BFA)', color: '#06122B', border: 'none', borderRadius: 8, padding: '8px 13px', fontWeight: 600, fontSize: 12, cursor: 'pointer' }}>
             <Icon d="M12 3l1.9 5.8H20l-4.9 3.6 1.9 5.8L12 14.6 7 18.2l1.9-5.8L4 8.8h6.1z" size={13} stroke="currentColor" width={2.2} />
             Troubleshoot with AI
