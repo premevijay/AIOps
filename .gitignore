@@ -14,3 +14,7 @@ venv/
 
 # os
 .DS_Store
+
+# ci screenshotter
+.github/ci/node_modules/
+.github/ci/shots/
