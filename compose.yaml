@@ -116,6 +116,22 @@ services:
     depends_on: [bus, worker, state-db]
     restart: unless-stopped
 
+  # Results Store — subscribes to the worker's result fanout (aiops.results) and
+  # persists every job outcome, serving the latest-per-device-per-op read API the
+  # dashboard Compliance / Backup / Health views consume.
+  results:
+    build: ./services/results
+    environment:
+      NATS_URL: nats://bus:4222
+      RESULTS_SUBJECT: ${RESULTS_SUBJECT:-aiops.results}
+      # durable store: postgres (state-db) by default; set memory for ephemeral
+      RESULTS_STORE: ${RESULTS_STORE:-postgres}
+      RESULTS_DB_URL: postgresql://aiops:${STATE_DB_PASSWORD:-aiops}@state-db:5432/aiops
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    ports: ["8090:8090"]
+    depends_on: [bus, worker, state-db]
+    restart: unless-stopped
+
   # ---- Telemetry stack (monitoring capability — OFF Ansible) ---------------
   # Telegraf polls SNMP + runs synthetic probes -> Prometheus -> Grafana.
   telegraf:

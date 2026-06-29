@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     nats_url: str = "nats://bus:4222"
     job_subject: str = "aiops.jobs"          # workers listen on "<subject>.<op>"
     queue_group: str = "workers"             # NATS queue group → load-balanced
+    results_subject: str = "aiops.results"   # every JobResult is fanned out here
 
     # Secret provider: "cyberark" (Conjur) or "env" (local first-run testing)
     secret_provider: str = "env"
