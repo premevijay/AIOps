@@ -28,3 +28,38 @@
           - "'aaa new-model' in cfg_lines"                 # AAA enabled
         fail_msg: "{{ inventory_hostname }} FAILS the hardening baseline"
         success_msg: "{{ inventory_hostname }} passes the hardening baseline"
+
+    # ----- PAN-OS STARTER baseline -----------------------------------------
+    # A minimal firewall-hygiene check: no "permit any any any allow" rule.
+    # This is a STARTER baseline — extend it with your org's golden firewall
+    # policy (zones, profiles, logging, App-ID/User-ID enforcement, etc.).
+    - name: Gather security rules (PAN-OS)
+      when: ansible_network_os == 'paloaltonetworks.panos.panos'
+      paloaltonetworks.panos.panos_security_rule_facts:
+        provider: "{{ panos_provider }}"
+      register: _panos_rules
+
+    - name: Assert firewall-hygiene baseline (PAN-OS)
+      when: ansible_network_os == 'paloaltonetworks.panos.panos'
+      vars:
+        # Guard the iteration: default to an empty list so an empty/absent
+        # ruleset evaluates cleanly instead of erroring.
+        rules: "{{ _panos_rules.security_rules | default([]) }}"
+        # A rule is "any-any-any allow" when every selector is 'any' and it
+        # allows. PAN-OS renders these selectors as lists, so test membership.
+        permit_any_rules: >-
+          {{ rules | selectattr('source_ip', 'defined')
+                   | selectattr('action', 'equalto', 'allow')
+                   | selectattr('source_ip', 'contains', 'any')
+                   | selectattr('destination_ip', 'contains', 'any')
+                   | selectattr('application', 'contains', 'any')
+                   | list }}
+      ansible.builtin.assert:
+        that:
+          # No security rule that is source any AND destination any AND
+          # application any AND action allow ("permit any any any allow").
+          - "permit_any_rules | length == 0"
+        fail_msg: >-
+          {{ inventory_hostname }} FAILS the firewall-hygiene baseline:
+          {{ permit_any_rules | map(attribute='rule_name') | list }} permit any/any/any
+        success_msg: "{{ inventory_hostname }} passes the firewall-hygiene baseline"

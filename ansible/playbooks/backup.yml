@@ -20,10 +20,18 @@
         commands: ['show running-config']
       register: _pull_nxos
 
+    - name: Pull running config (PAN-OS)
+      when: ansible_network_os == 'paloaltonetworks.panos.panos'
+      paloaltonetworks.panos.panos_op:
+        provider: "{{ panos_provider }}"
+        cmd: 'show config running'
+      register: _pull_panos
+
     - name: Normalize pulled config
       ansible.builtin.set_fact:
         running_config: >-
           {{ (_pull_ios.stdout[0] if ansible_network_os == 'cisco.ios.ios'
+              else _pull_panos.stdout if ansible_network_os == 'paloaltonetworks.panos.panos'
               else _pull_nxos.stdout[0]) }}
 
     - name: Ensure per-device config directory exists

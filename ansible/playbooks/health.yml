@@ -14,6 +14,43 @@
       cisco.nxos.nxos_facts:
         gather_subset: ['hardware', 'default']
 
+    # PAN-OS exposes facts as op-command output rather than ansible_net_* vars,
+    # so pull system info / resources / HA state and map them into the same
+    # ansible_net_* facts the shared report below consumes.
+    - name: System info (PAN-OS)
+      when: ansible_network_os == 'paloaltonetworks.panos.panos'
+      paloaltonetworks.panos.panos_op:
+        provider: "{{ panos_provider }}"
+        cmd: 'show system info'
+      register: _sysinfo_panos
+
+    - name: System resources (PAN-OS)
+      when: ansible_network_os == 'paloaltonetworks.panos.panos'
+      paloaltonetworks.panos.panos_op:
+        provider: "{{ panos_provider }}"
+        cmd: 'show system resources'
+      register: _sysres_panos
+
+    - name: High-availability state (PAN-OS)
+      when: ansible_network_os == 'paloaltonetworks.panos.panos'
+      paloaltonetworks.panos.panos_op:
+        provider: "{{ panos_provider }}"
+        cmd: 'show high-availability state'
+      register: _hastate_panos
+
+    # panos_op returns parsed XML in `.stdout_xml` as a dict; surface the common
+    # health signals into the shared fact names so the report task is uniform.
+    - name: Map PAN-OS facts into the shared report vars
+      when: ansible_network_os == 'paloaltonetworks.panos.panos'
+      vars:
+        _sys: "{{ (_sysinfo_panos.stdout_xml | default({})).get('response', {}).get('result', {}).get('system', {}) }}"
+      ansible.builtin.set_fact:
+        ansible_net_model: "{{ _sys.model | default('?') }}"
+        ansible_net_version: "{{ _sys['sw-version'] | default('?') }}"
+        ansible_net_serialnum: "{{ _sys.serial | default('?') }}"
+        ansible_net_uptime: "{{ _sys.uptime | default('?') }}"
+        panos_ha_state: "{{ ((_hastate_panos.stdout_xml | default({})).get('response', {}).get('result', {}).get('enabled', 'no')) }}"
+
     - name: Report health snapshot
       ansible.builtin.debug:
         msg:
@@ -24,3 +61,4 @@
           uptime: "{{ ansible_net_uptime | default('?') }}"
           mem_free_mb: "{{ ((ansible_net_memfree_mb | default(0)) | int) }}"
           mem_total_mb: "{{ ((ansible_net_memtotal_mb | default(0)) | int) }}"
+          ha_enabled: "{{ panos_ha_state | default('n/a') }}"

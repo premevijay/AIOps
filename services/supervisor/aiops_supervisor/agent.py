@@ -31,9 +31,11 @@ Operating rules:
 """
 
 
-def build_agent(tools):
-    """Build the supervisor agent from the model + capability tools."""
+def build_agent(tools, system_prompt: str = SYSTEM_PROMPT):
+    """Build an agent from the model + tools. `system_prompt` lets a domain
+    specialist (e.g. the firewall agent) carry its own persona while reusing the
+    same gated capability tools."""
     # `state_modifier` is the system-prompt arg in langgraph 0.2.x (the pinned
     # line); `prompt` only exists in later releases. Keep this matched to the
     # pinned langgraph so the container actually starts.
-    return create_react_agent(build_model(), tools, state_modifier=SYSTEM_PROMPT)
+    return create_react_agent(build_model(), tools, state_modifier=system_prompt)

@@ -1,0 +1,16 @@
+# Connection settings for Palo Alto (PAN-OS). Unlike IOS/NX-OS (network_cli),
+# the panos modules run over the device API from the control node.
+ansible_connection: local
+ansible_network_os: paloaltonetworks.panos.panos   # marker used by playbook when: branches
+ansible_python_interpreter: "{{ ansible_playbook_python }}"
+
+# NOTE: the panos modules need the `pan-os-python` Python package on the control
+# node (the worker image). Add `pan-os-python` to services/worker/requirements.txt.
+
+# Credentials, same two-source priority as ios.yml:
+#   1. extravars injected by the worker (device_username/password from the vault)
+#   2. env fallback (DEVICE_USERNAME/...) for by-hand runs
+panos_provider:
+  ip_address: "{{ ansible_host | default(lookup('env', 'DEVICE_HOST')) }}"
+  username: "{{ device_username | default(lookup('env', 'DEVICE_USERNAME')) }}"
+  password: "{{ device_password | default(lookup('env', 'DEVICE_PASSWORD')) }}"
