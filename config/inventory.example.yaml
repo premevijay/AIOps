@@ -14,9 +14,9 @@ devices:
     port: 22
     vault_path: aiops/lab/cat9k-lab-01
 
-  # A Palo Alto firewall (VM-series in EVE-NG). os=panos selects the panos
-  # connection vars and the PAN-OS playbook branches; the firewall agent owns
-  # every device with type=firewall. Reached over the device's mgmt API.
+  # Firewalls — all owned by the Firewall specialist agent (type=firewall) and
+  # reached directly over each vendor's management API by `firewall_query`.
+  # The `os` selects the vendor handler: panos | fortios | checkpoint | ftd.
   - name: pa-fw-lab-01
     vendor: Palo Alto
     os: panos
@@ -24,3 +24,27 @@ devices:
     mgmt_host: 10.10.10.21
     port: 443
     vault_path: aiops/lab/pa-fw-lab-01
+
+  - name: fgt-edge-01
+    vendor: FortiGate
+    os: fortios            # firewall_query: REST GET (password = FortiOS API token)
+    type: firewall
+    mgmt_host: 10.10.10.22
+    port: 443
+    vault_path: aiops/lab/fgt-edge-01
+
+  - name: cp-mgmt-01
+    vendor: Check Point    # the management server (web_api login -> show-* -> logout)
+    os: checkpoint
+    type: firewall
+    mgmt_host: 10.10.10.23
+    port: 443
+    vault_path: aiops/lab/cp-mgmt-01
+
+  - name: ftd-dc-01
+    vendor: Cisco FTD      # firewall_query: Firepower Device Manager (FDM) REST + token
+    os: ftd
+    type: firewall
+    mgmt_host: 10.10.10.24
+    port: 443
+    vault_path: aiops/lab/ftd-dc-01

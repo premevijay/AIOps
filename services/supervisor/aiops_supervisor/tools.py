@@ -139,12 +139,18 @@ def build_tools(bus: BusClient, devices: list[dict], change: ChangeClient) -> li
         StructuredTool.from_function(
             name="firewall_query",
             description=(
-                "Run a READ-ONLY operational command directly against a firewall's "
-                "management API (PAN-OS). Args: device_name, command (e.g. "
-                "'show system info', 'show high-availability state', 'show running "
-                "security-policy'). Only show/test commands are allowed — config "
-                "changes must go through propose_change. Use this for ad-hoc firewall "
-                "questions beyond the fixed backup/health/compliance capabilities."
+                "Run a READ-ONLY query directly against a firewall's management API. "
+                "Args: device_name, command. The command form depends on the firewall "
+                "vendor (check the device's os first): "
+                "PAN-OS (panos) → a CLI op string, e.g. 'show system info', 'show "
+                "high-availability state'. "
+                "FortiGate (fortios) → a REST path, e.g. 'monitor/system/status', "
+                "'cmdb/firewall/policy'. "
+                "Check Point (checkpoint) → a 'show-*' command, e.g. "
+                "'show-gateways-and-servers', 'show-access-rulebase'. "
+                "Cisco FTD (ftd) → an FDM resource path, e.g. 'object/networks'. "
+                "Read-only only — config changes must go through propose_change. Use "
+                "this for ad-hoc questions beyond the fixed backup/health/compliance ops."
             ),
             coroutine=_firewall_query,
         ),

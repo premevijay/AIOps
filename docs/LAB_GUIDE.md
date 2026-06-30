@@ -114,18 +114,25 @@ Success = a `JobResult` with `"ok": true`. The backup is git-versioned in the
 `configs` volume. Details: [`services/worker/README.md`](../services/worker/README.md),
 [`ansible/README.md`](../ansible/README.md).
 
-### Firewall agent (Palo Alto) — direct query path
+### Firewall agent — direct query path (PAN-OS, FortiGate, Check Point, FTD)
 
 Firewalls are owned by the **Firewall specialist agent** and reached *directly
-over the device management API* (not CLI scraping). Two ways to use them:
+over each vendor's management API* (not CLI scraping). Two ways to use them:
 
 - **Fixed capabilities** (Ansible, structured): `backup` / `health` /
   `compliance` against an `os: panos` device, exactly like the switch examples
   above (`python scripts/enqueue_job.py health --device pa-fw-lab-01`).
+  *(PAN-OS playbooks today; other vendors use `firewall_query` below.)*
 - **Free-form `firewall_query`** (direct API, read-only): the agent can run any
-  `show`/`test` operational command — not just the fixed ops. Mutating commands
-  are refused; config changes go through change management. Example via the
-  supervisor:
+  read query — not just the fixed ops. Mutating operations are refused; config
+  changes go through change management. The command form is per-vendor:
+  - **PAN-OS** (`os: panos`): a CLI op string — `show system info`.
+  - **FortiGate** (`os: fortios`): a REST path — `monitor/system/status` (store
+    the FortiOS API token as the device password).
+  - **Check Point** (`os: checkpoint`): a `show-*` command — `show-gateways-and-servers`.
+  - **Cisco FTD** (`os: ftd`): an FDM resource path — `object/networks`.
+
+  Example via the supervisor:
 
   ```bash
   # the Firewall agent answers, scoped to firewalls only
