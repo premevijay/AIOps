@@ -119,10 +119,13 @@ Success = a `JobResult` with `"ok": true`. The backup is git-versioned in the
 Firewalls are owned by the **Firewall specialist agent** and reached *directly
 over each vendor's management API* (not CLI scraping). Two ways to use them:
 
-- **Fixed capabilities** (Ansible, structured): `backup` / `health` /
-  `compliance` against an `os: panos` device, exactly like the switch examples
-  above (`python scripts/enqueue_job.py health --device pa-fw-lab-01`).
-  *(PAN-OS playbooks today; other vendors use `firewall_query` below.)*
+- **Fixed capabilities** (structured): `backup` / `health` / `compliance`, run
+  the same way as the switch examples
+  (`python scripts/enqueue_job.py health --device pa-fw-lab-01`). PAN-OS runs
+  these via Ansible; FortiGate / Check Point / FTD run them **directly over the
+  vendor API**. Note: `backup` for Check Point and FTD is an async management
+  export and is not implemented — those return an honest "unsupported" (use
+  `health` / `compliance` / `firewall_query`); FortiGate `backup` is supported.
 - **Free-form `firewall_query`** (direct API, read-only): the agent can run any
   read query — not just the fixed ops. Mutating operations are refused; config
   changes go through change management. The command form is per-vendor:
