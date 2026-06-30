@@ -14,14 +14,16 @@ import structlog
 
 from .config import settings
 from .execution import OP_PLAYBOOK, build_executor
+from .firewall_api import FIREWALL_OPS
 from .handlers import handle
 from .models import JobRequest, JobResult
 from .secrets import build_secret_provider
 
 log = structlog.get_logger(__name__)
 
-# Capabilities this worker serves (each maps to a playbook).
-OPS = tuple(OP_PLAYBOOK)
+# Capabilities this worker serves: Ansible-backed ops (each maps to a playbook)
+# plus the direct firewall ops (firewall_query).
+OPS = tuple(OP_PLAYBOOK) + tuple(FIREWALL_OPS)
 
 
 async def run() -> None:

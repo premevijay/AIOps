@@ -70,6 +70,9 @@ services:
       CONJUR_API_KEY: ${CONJUR_API_KEY:-}
       # shared key that gates `apply` writes (must match the change service)
       CHANGE_SIGNING_KEY: ${CHANGE_SIGNING_KEY:-}
+      # direct firewall query path (firewall_query): verify the firewall's TLS
+      # cert — set false for lab firewalls with self-signed certs.
+      FIREWALL_VERIFY_TLS: ${FIREWALL_VERIFY_TLS:-true}
       # execution backend: local (ansible-runner) | awx
       EXECUTION_BACKEND: ${EXECUTION_BACKEND:-local}
       CONFIG_STORE: /data/configs

@@ -114,6 +114,42 @@ Success = a `JobResult` with `"ok": true`. The backup is git-versioned in the
 `configs` volume. Details: [`services/worker/README.md`](../services/worker/README.md),
 [`ansible/README.md`](../ansible/README.md).
 
+### Firewall agent — direct query path (PAN-OS, FortiGate, Check Point, FTD)
+
+Firewalls are owned by the **Firewall specialist agent** and reached *directly
+over each vendor's management API* (not CLI scraping). Two ways to use them:
+
+- **Fixed capabilities** (structured): `backup` / `health` / `compliance`, run
+  the same way as the switch examples
+  (`python scripts/enqueue_job.py health --device pa-fw-lab-01`). PAN-OS runs
+  these via Ansible; FortiGate / Check Point / FTD run them **directly over the
+  vendor API**. Note: `backup` for Check Point and FTD is an async management
+  export and is not implemented — those return an honest "unsupported" (use
+  `health` / `compliance` / `firewall_query`); FortiGate `backup` is supported.
+- **Free-form `firewall_query`** (direct API, read-only): the agent can run any
+  read query — not just the fixed ops. Mutating operations are refused; config
+  changes go through change management. The command form is per-vendor:
+  - **PAN-OS** (`os: panos`): a CLI op string — `show system info`.
+  - **FortiGate** (`os: fortios`): a REST path — `monitor/system/status` (store
+    the FortiOS API token as the device password).
+  - **Check Point** (`os: checkpoint`): a `show-*` command — `show-gateways-and-servers`.
+  - **Cisco FTD** (`os: ftd`): an FDM resource path — `object/networks`.
+
+  Example via the supervisor:
+
+  ```bash
+  # the Firewall agent answers, scoped to firewalls only
+  curl -s localhost:8088/agents                       # see the specialist roster
+  curl -s localhost:8088/agents/firewall/intent \
+    -H 'content-type: application/json' \
+    -d '{"text":"show me HA state and system info for pa-fw-lab-01"}'
+  ```
+
+For a lab PAN-OS VM-series with a self-signed cert, set `FIREWALL_VERIFY_TLS=false`
+in `.env`. The supervisor needs `ANTHROPIC_API_KEY` + `ANTHROPIC_MODEL` for the
+agent endpoints; the raw `firewall_query` op can also be driven without a key by
+the dashboard/`/run` path's siblings.
+
 > **That's the core loop working.** Everything below is optional hardening and
 > additional capabilities — add them one at a time.
 

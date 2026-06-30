@@ -13,3 +13,38 @@ devices:
     mgmt_host: 10.10.10.11
     port: 22
     vault_path: aiops/lab/cat9k-lab-01
+
+  # Firewalls — all owned by the Firewall specialist agent (type=firewall) and
+  # reached directly over each vendor's management API by `firewall_query`.
+  # The `os` selects the vendor handler: panos | fortios | checkpoint | ftd.
+  - name: pa-fw-lab-01
+    vendor: Palo Alto
+    os: panos
+    type: firewall
+    mgmt_host: 10.10.10.21
+    port: 443
+    vault_path: aiops/lab/pa-fw-lab-01
+
+  - name: fgt-edge-01
+    vendor: FortiGate
+    os: fortios            # firewall_query: REST GET (password = FortiOS API token)
+    type: firewall
+    mgmt_host: 10.10.10.22
+    port: 443
+    vault_path: aiops/lab/fgt-edge-01
+
+  - name: cp-mgmt-01
+    vendor: Check Point    # the management server (web_api login -> show-* -> logout)
+    os: checkpoint
+    type: firewall
+    mgmt_host: 10.10.10.23
+    port: 443
+    vault_path: aiops/lab/cp-mgmt-01
+
+  - name: ftd-dc-01
+    vendor: Cisco FTD      # firewall_query: Firepower Device Manager (FDM) REST + token
+    os: ftd
+    type: firewall
+    mgmt_host: 10.10.10.24
+    port: 443
+    vault_path: aiops/lab/ftd-dc-01

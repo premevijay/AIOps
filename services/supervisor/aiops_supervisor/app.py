@@ -20,6 +20,7 @@ from pydantic import BaseModel
 from .bus_client import BusClient
 from .config import settings
 from .inventory import device_names, get_device, load_inventory
+from .specialists import devices_for, get_specialist, list_specialists
 
 log = structlog.get_logger(__name__)
 
@@ -53,6 +54,7 @@ async def lifespan(app: FastAPI):
     app.state.devices = load_inventory(settings.inventory_path)
     app.state.change = ChangeClient(settings.change_url)
     app.state.agent = None  # built lazily on first /intent (needs an LLM key)
+    app.state.specialist_agents = {}  # name -> agent, built lazily per specialist
     log.info(
         "supervisor.ready",
         devices=len(app.state.devices),
@@ -68,7 +70,7 @@ app = FastAPI(title="AIOps NetOps Supervisor", lifespan=lifespan)
 
 
 def _get_agent(app: FastAPI):
-    """Build the LangGraph agent on first use. Raises if no model is configured."""
+    """Build the supervisor (generalist) agent on first use. Raises if no model."""
     if app.state.agent is None:
         from .agent import build_agent
         from .tools import build_tools
@@ -77,6 +79,32 @@ def _get_agent(app: FastAPI):
             build_tools(app.state.bus, app.state.devices, app.state.change)
         )
     return app.state.agent
+
+
+def _get_specialist_agent(app: FastAPI, spec):
+    """Build a domain specialist's agent on first use: the shared capability
+    toolbelt scoped to the devices it owns, plus its own persona."""
+    cached = app.state.specialist_agents.get(spec.name)
+    if cached is None:
+        from .agent import build_agent
+        from .tools import build_tools
+
+        scoped = devices_for(spec, app.state.devices)
+        cached = build_agent(
+            build_tools(app.state.bus, scoped, app.state.change),
+            system_prompt=spec.system_prompt,
+        )
+        app.state.specialist_agents[spec.name] = cached
+    return cached
+
+
+async def _run_agent(agent, text: str) -> str:
+    result = await agent.ainvoke({"messages": [("user", text)]})
+    messages = result.get("messages", [])
+    reply = messages[-1].content if messages else ""
+    if isinstance(reply, list):  # content can be a list of blocks
+        reply = "".join(b.get("text", "") for b in reply if isinstance(b, dict))
+    return reply or "(no response)"
 
 
 @app.get("/healthz")
@@ -114,8 +142,24 @@ async def run(body: RunJob) -> dict:
         raise HTTPException(status_code=502, detail=f"job failed: {exc}")
 
 
+@app.get("/agents")
+async def agents() -> list[dict]:
+    """The domain specialist roster (hybrid team) and how many devices each owns."""
+    devs = app.state.devices
+    return [
+        {
+            "name": s.name,
+            "title": s.title,
+            "summary": s.summary,
+            "device_count": len(devices_for(s, devs)),
+        }
+        for s in list_specialists()
+    ]
+
+
 @app.post("/intent", response_model=IntentReply)
 async def intent(body: Intent) -> IntentReply:
+    """Route an intent to the supervisor (generalist team lead)."""
     try:
         agent = _get_agent(app)
     except Exception as exc:  # noqa: BLE001 — most likely ANTHROPIC_MODEL unset
@@ -123,9 +167,21 @@ async def intent(body: Intent) -> IntentReply:
             status_code=503,
             detail=f"agent unavailable (set ANTHROPIC_API_KEY + ANTHROPIC_MODEL): {exc}",
         )
-    result = await agent.ainvoke({"messages": [("user", body.text)]})
-    messages = result.get("messages", [])
-    reply = messages[-1].content if messages else ""
-    if isinstance(reply, list):  # content can be a list of blocks
-        reply = "".join(b.get("text", "") for b in reply if isinstance(b, dict))
-    return IntentReply(reply=reply or "(no response)")
+    return IntentReply(reply=await _run_agent(agent, body.text))
+
+
+@app.post("/agents/{name}/intent", response_model=IntentReply)
+async def specialist_intent(name: str, body: Intent) -> IntentReply:
+    """Route an intent to a domain specialist (e.g. the firewall agent), scoped
+    to the devices it owns and carrying its own persona."""
+    spec = get_specialist(name)
+    if spec is None:
+        raise HTTPException(status_code=404, detail=f"unknown specialist '{name}'")
+    try:
+        agent = _get_specialist_agent(app, spec)
+    except Exception as exc:  # noqa: BLE001 — most likely ANTHROPIC_MODEL unset
+        raise HTTPException(
+            status_code=503,
+            detail=f"agent unavailable (set ANTHROPIC_API_KEY + ANTHROPIC_MODEL): {exc}",
+        )
+    return IntentReply(reply=await _run_agent(agent, body.text))

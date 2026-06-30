@@ -32,6 +32,12 @@ class Settings(BaseSettings):
     # an apply job with no/invalid token signed by this key is refused.
     change_signing_key: str = ""
 
+    # Direct firewall query path (firewall_query op — non-Ansible, read-only).
+    # Verify the firewall's TLS cert; set false for lab firewalls with self-signed
+    # certs. The connection is to the device's internal mgmt IP (bypasses proxy).
+    firewall_verify_tls: bool = True
+    firewall_timeout: float = 30.0
+
     # Execution backend: "local" (ansible-runner) or "awx" (AWX job templates)
     execution_backend: str = "local"
     ansible_project_dir: str = "/app/ansible"

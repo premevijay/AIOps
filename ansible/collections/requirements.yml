@@ -13,7 +13,7 @@ collections:
   # SD-WAN: cEdge uses cisco.ios; vManage automation via cisco.sdwan (add when needed)
 
   # firewalls
-  - name: paloaltonetworks.panos
+  - name: paloaltonetworks.panos   # also needs `pip install pan-os-python` in the worker image
   - name: cisco.asa          # FTD via ASA/REST patterns
   - name: check_point.mgmt   # Check Point management API
   - name: fortinet.fortios

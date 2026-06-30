@@ -13,6 +13,8 @@ all:
         nxos:
           hosts: {}
         panos:
-          hosts: {}
+          hosts:
+            pa-fw-lab-01:
+              ansible_host: 10.10.10.21
         fortios:
           hosts: {}
