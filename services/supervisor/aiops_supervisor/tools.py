@@ -69,6 +69,19 @@ def build_tools(bus: BusClient, devices: list[dict], change: ChangeClient) -> li
         ]
         return "Audit ledger (most recent):\n" + "\n".join(lines)
 
+    async def _firewall_query(device_name: str, command: str) -> str:
+        """Run a read-only operational command directly against a firewall's
+        management API (PAN-OS). Only `show`/`test` commands are allowed."""
+        dev = get_device(devices, device_name)
+        if dev is None:
+            return f"Unknown device '{device_name}'. Known devices: {', '.join(device_names(devices))}"
+        result = await bus.request_job("firewall_query", dev, {"cmd": command})
+        if not result.get("ok"):
+            return f"firewall_query `{command}` on {device_name} failed: {result.get('error') or 'error'}"
+        data = result.get("data") or {}
+        out = str(data.get("result", "")).strip()
+        return f"{device_name} `{command}`:\n{out[:4000]}" if out else f"{device_name} `{command}`: (empty result)"
+
     async def _risk_posture() -> str:
         """Risk/Governance capability: posture across all change requests."""
         p = await change.posture()
@@ -122,6 +135,18 @@ def build_tools(bus: BusClient, devices: list[dict], change: ChangeClient) -> li
                 "— status/risk-level mix, open high-risk changes, recent policy denials."
             ),
             coroutine=_risk_posture,
+        ),
+        StructuredTool.from_function(
+            name="firewall_query",
+            description=(
+                "Run a READ-ONLY operational command directly against a firewall's "
+                "management API (PAN-OS). Args: device_name, command (e.g. "
+                "'show system info', 'show high-availability state', 'show running "
+                "security-policy'). Only show/test commands are allowed — config "
+                "changes must go through propose_change. Use this for ad-hoc firewall "
+                "questions beyond the fixed backup/health/compliance capabilities."
+            ),
+            coroutine=_firewall_query,
         ),
     ]
     for op, desc in CAPABILITIES.items():

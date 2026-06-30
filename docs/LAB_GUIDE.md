@@ -114,6 +114,32 @@ Success = a `JobResult` with `"ok": true`. The backup is git-versioned in the
 `configs` volume. Details: [`services/worker/README.md`](../services/worker/README.md),
 [`ansible/README.md`](../ansible/README.md).
 
+### Firewall agent (Palo Alto) — direct query path
+
+Firewalls are owned by the **Firewall specialist agent** and reached *directly
+over the device management API* (not CLI scraping). Two ways to use them:
+
+- **Fixed capabilities** (Ansible, structured): `backup` / `health` /
+  `compliance` against an `os: panos` device, exactly like the switch examples
+  above (`python scripts/enqueue_job.py health --device pa-fw-lab-01`).
+- **Free-form `firewall_query`** (direct API, read-only): the agent can run any
+  `show`/`test` operational command — not just the fixed ops. Mutating commands
+  are refused; config changes go through change management. Example via the
+  supervisor:
+
+  ```bash
+  # the Firewall agent answers, scoped to firewalls only
+  curl -s localhost:8088/agents                       # see the specialist roster
+  curl -s localhost:8088/agents/firewall/intent \
+    -H 'content-type: application/json' \
+    -d '{"text":"show me HA state and system info for pa-fw-lab-01"}'
+  ```
+
+For a lab PAN-OS VM-series with a self-signed cert, set `FIREWALL_VERIFY_TLS=false`
+in `.env`. The supervisor needs `ANTHROPIC_API_KEY` + `ANTHROPIC_MODEL` for the
+agent endpoints; the raw `firewall_query` op can also be driven without a key by
+the dashboard/`/run` path's siblings.
+
 > **That's the core loop working.** Everything below is optional hardening and
 > additional capabilities — add them one at a time.
 

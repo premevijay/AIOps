@@ -15,11 +15,15 @@ import structlog
 from .config import settings
 from .execution import OP_PLAYBOOK
 from .execution.base import WRITE_OPS, ExecutionBackend
+from .firewall_api import FIREWALL_OPS, query_firewall
 from .models import JobRequest, JobResult
 from .secrets.base import SecretProvider
 from .signing import verify
 
 log = structlog.get_logger(__name__)
+
+# Every op this worker knows: Ansible-backed capabilities + direct firewall ops.
+KNOWN_OPS = set(OP_PLAYBOOK) | set(FIREWALL_OPS)
 
 
 def _ms(start: float) -> int:
@@ -30,7 +34,7 @@ async def handle(req: JobRequest, secrets: SecretProvider | None,
                  executor: ExecutionBackend) -> JobResult:
     start = time.monotonic()
     try:
-        if req.op not in OP_PLAYBOOK:
+        if req.op not in KNOWN_OPS:
             raise ValueError(f"unknown op: {req.op!r}")
 
         # The gate: device-mutating ops require a valid approval token issued by
@@ -45,6 +49,22 @@ async def handle(req: JobRequest, secrets: SecretProvider | None,
                     error="unapproved write blocked: missing or invalid approval token",
                     duration_ms=_ms(start),
                 )
+
+        # Direct firewall query path (non-Ansible, read-only). Needs creds for the
+        # device's management API, resolved from the vault like any other op.
+        if req.op in FIREWALL_OPS:
+            if secrets is None:
+                raise RuntimeError(
+                    "firewall_query needs a secret provider; not available with this backend config"
+                )
+            creds = await secrets.get_device_credentials(req.device)
+            data = await query_firewall(req.device, creds, req.params)
+            return JobResult(
+                op=req.op, device_name=req.device.name, ok=bool(data.get("ok")),
+                data=data, error=None if data.get("ok") else "query returned an error status",
+                duration_ms=_ms(start),
+            )
+
         # Only resolve creds when the backend needs them (local injects them as
         # extravars; AWX injects its own and runs with secrets=None).
         creds = None
